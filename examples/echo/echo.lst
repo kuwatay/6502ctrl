@@ -1,0 +1,152 @@
+Sections:
+00: "seg200" (200-25C)
+
+
+Source: "echo.asm"
+                        	     1: ; @file echo.asm: hello world example program
+                        	     2: ;  use vasm for assemble
+                        	     3: ;  vasm6502_oldstyle -Fbin -dotdir -L hello.lst hello.asm
+                        	     4:         .org 200h
+                        	     5: 
+                        	     6: LF = 0ah
+                        	     7: CR = 0dh
+                        	     8: SP = 0xff
+                        	     9: 
+                        	    10: DMA_HALT = 0
+                        	    11: DMA_SIO = 1
+                        	    12: 
+                        	    13: DMA_RESET = 1	
+                        	    14: DMA_READ = 2
+                        	    15: DMA_WRITE = 3	
+                        	    16: DMA_STATUS = 4
+                        	    17: 	
+                        	    18: start:	
+00:0200 A2FF            	    19:         ldx #SP
+00:0202 9A              	    20:         txs
+                        	    21: 	
+00:0203 A200            	    22: 	ldx #0
+00:0205 BD1802          	    23: loop:	lda msg,x
+00:0208 F006            	    24: 	beq echo
+00:020A 203902          	    25: 	jsr putc
+00:020D E8              	    26: 	inx
+00:020E 80F5            	    27: 	bra loop
+                        	    28: 
+00:0210 202F02          	    29: echo:	jsr getc
+00:0213 203902          	    30: 	jsr putc
+00:0216 80F8            	    31: 	bra echo
+                        	    32: 
+                        	    33: 	
+00:0218 696E707574206368	    34: msg:    .byte "input char to echo", CR, LF, 0
+00:0220 617220746F206563
+00:0228 686F
+00:022A 0D
+00:022B 0A
+00:022C 00
+                        	    35: 
+                        	    36: 
+                        	    37: ;;; DMA Serial I/O routine
+                        	    38: 
+                        	    39: 	;; getc
+00:022D 3402            	    40: 	.word dmarq_1
+00:022F CB              	    41: getc:	wai
+00:0230 AD3802          	    42: 	lda dmach_1
+00:0233 60              	    43: 	rts
+                        	    44: 
+                        	    45: dmarq_1:
+00:0234 01              	    46: 	.byte DMA_SIO 		; dmano
+00:0235 02              	    47: 	.byte DMA_READ		; read
+00:0236 FFFF            	    48: 	.word $ffff		; dma request block address (unused for SIO)
+                        	    49: dmach_1:
+00:0238 00              	    50: 	.byte 0			; dma data byte
+                        	    51: 	
+                        	    52: 
+                        	    53: 	;; putc
+00:0239 8D4602          	    54: putc:	sta dmach_2
+00:023C 8002            	    55: 	bra putc1
+00:023E 4202            	    56: 	.word dmarq_2
+00:0240 CB              	    57: putc1:	wai
+00:0241 60              	    58: 	rts
+                        	    59: 
+                        	    60: dmarq_2:
+00:0242 01              	    61: 	.byte DMA_SIO 		; dmano
+00:0243 03              	    62: 	.byte DMA_WRITE		; write
+00:0244 FFFF            	    63: 	.word $ffff		; dma request block address (unused for SIO)
+                        	    64: dmach_2:
+00:0246 00              	    65: 	.byte 0			; dma data byte
+                        	    66: 	
+                        	    67: 	;; status
+00:0247 4E02            	    68: 	.word dmarq_3
+00:0249 CB              	    69: stat:	wai
+00:024A AD5202          	    70: 	lda dmach_3
+00:024D 60              	    71: 	rts
+                        	    72: 
+                        	    73: dmarq_3:
+00:024E 01              	    74: 	.byte DMA_SIO 		; dmano
+00:024F 04              	    75: 	.byte DMA_STATUS	; status
+00:0250 FFFF            	    76: 	.word $ffff		; dma request block address (unused for SIO)
+                        	    77: dmach_3:
+00:0252 00              	    78: 	.byte 0			; dma data byte
+                        	    79: 
+                        	    80: 
+00:0253 5702            	    81: 	.word dmarq_halt
+00:0255 CB              	    82: halt:	wai
+00:0256 60              	    83: 	rts
+                        	    84: dmarq_halt:
+00:0257 00              	    85: 	.byte DMA_HALT
+00:0258 FF              	    86: 	.byte 0xff		;dummy
+00:0259 FFFF            	    87: 	.word 0xffff		;dummy
+00:025B FF              	    88: 	.byte 0xff		;dummy
+                        	    89: 
+
+
+Symbols by name:
+CR                               E:000D
+DMA_HALT                         E:0000
+DMA_READ                         E:0002
+DMA_SIO                          E:0001
+DMA_STATUS                       E:0004
+DMA_WRITE                        E:0003
+LF                               E:000A
+SP                               E:00FF
+dmach_1                          A:0238
+dmach_2                          A:0246
+dmach_3                          A:0252
+dmarq_1                          A:0234
+dmarq_2                          A:0242
+dmarq_3                          A:024E
+dmarq_halt                       A:0257
+echo                             A:0210
+getc                             A:022F
+halt                             A:0255
+loop                             A:0205
+msg                              A:0218
+putc                             A:0239
+putc1                            A:0240
+start                            A:0200
+stat                             A:0249
+
+Symbols by value:
+0000 DMA_HALT
+0001 DMA_SIO
+0002 DMA_READ
+0003 DMA_WRITE
+0004 DMA_STATUS
+000A LF
+000D CR
+00FF SP
+0200 start
+0205 loop
+0210 echo
+0218 msg
+022F getc
+0234 dmarq_1
+0238 dmach_1
+0239 putc
+0240 putc1
+0242 dmarq_2
+0246 dmach_2
+0249 stat
+024E dmarq_3
+0252 dmach_3
+0255 halt
+0257 dmarq_halt

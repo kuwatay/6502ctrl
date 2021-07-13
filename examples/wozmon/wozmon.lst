@@ -1,0 +1,317 @@
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm - Page 1 - 2021/06/02 21時12分40秒
+
+
+       1/       0 :                     ; Apple I Monitor ROM
+       2/       0 :                     ; Steve Wozniak
+       3/       0 :                     ; 1976
+       4/       0 :                     ; --------------------------------------------------------
+       5/       0 :                     
+       6/       0 :                     	CPU	W65C02S
+       7/       0 :                     ;.segment "MONITOR"		;
+       8/       0 :                     
+       9/       0 :                     ;.export ECHO
+      10/       0 :                     ;	org $fe00
+      11/    FF00 :                     	org $ff00
+      12/    FF00 :                     ; --------------------------------------------------------
+      13/    FF00 :                     ; Zero page variables
+      14/    FF00 : =$24                XAML	:= $24
+      15/    FF00 : =$25                XAMH	:= $25
+      16/    FF00 : =$26                STL	:= $26
+      17/    FF00 : =$27                STH	:= $27
+      18/    FF00 : =$28                L	:= $28
+      19/    FF00 : =$29                H	:= $29
+      20/    FF00 : =$2A                YSAV	:= $2A
+      21/    FF00 : =$2B                MODE	:= $2B
+      22/    FF00 :                     
+      23/    FF00 :                     ; I/O locations
+      24/    FF00 : =$200               IN	:= $0200		; Input buffer is $0200 to $027F
+      25/    FF00 :                     ;KBD	:= $D010		; Keyboard data
+      26/    FF00 :                     ;DSP	:= $D012		; Display data
+      27/    FF00 :                     ;KBDCR	:= $D011		; Keyboard control register
+      28/    FF00 :                     ;DSPCR	:= $D013		; Display control register
+      29/    FF00 :                     
+      30/    FF00 :                     ;;; DMA command
+      31/    FF00 : =$0                 DMA_HALT = 0
+      32/    FF00 : =$1                 DMA_SIO = 1
+      33/    FF00 :                     
+      34/    FF00 : =$1                 DMA_RESET = 1	
+      35/    FF00 : =$2                 DMA_READ = 2
+      36/    FF00 : =$3                 DMA_WRITE = 3	
+      37/    FF00 : =$4                 DMA_STATUS = 4
+      38/    FF00 : =$5                 DMA_READ_BLOCK = 5
+      39/    FF00 :                     	
+      40/    FF00 :                     ;ORIGINAL_WAZ = 1
+      41/    FF00 : =>UNDEFINED         	IFDEF ORIGINAL_WAZ
+      42/    FF00 :                     OUTPUT_MASK = $80
+      43/    FF00 : [41]                	ENDIF
+      44/    FF00 :                     	
+      45/    FF00 : =>UNDEFINED         	IFNDEF ORIGINAL_WAZ
+      46/    FF00 : =$0                 OUTPUT_MASK = $00
+      47/    FF00 : [45]                	ENDIF
+      48/    FF00 :                     	
+      49/    FF00 :                     ; ASCII codes
+      50/    FF00 : =$D                 CR	= $0D | OUTPUT_MASK	; Carriage return
+      51/    FF00 : =$1B                ESC	= $1B | OUTPUT_MASK	; Escape
+      52/    FF00 : =$5C                SLASH	= '\\' | OUTPUT_MASK	; 
+      53/    FF00 : =$5F                UNDERSC = '_' | OUTPUT_MASK	; Underscore (acts as backspace)
+      54/    FF00 : =$2E                DOT	= '.' | OUTPUT_MASK	; .
+      55/    FF00 : =$3A                COLON	= ':' | OUTPUT_MASK	; :
+      56/    FF00 : =$52                R	= 'R' | OUTPUT_MASK	; "R"
+      57/    FF00 : =$20                SPACE	= ' ' | OUTPUT_MASK	; blank
+      58/    FF00 : =$30                ZERO	= '0' | OUTPUT_MASK	; "0"
+      59/    FF00 :                     
+      60/    FF00 :                     ; --------------------------------------------------------
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm - Page 2 - 2021/06/02 21時12分40秒
+
+
+      61/    FF00 : D8                  RESET:	cld			; Clear decimal arithmetic mode
+      62/    FF01 :                     ;	cli
+      63/    FF01 : A0 7F               	ldy	#$7F		; Mask for DSP data direction register
+      64/    FF03 :                     ;	sty	DSP		; Set it up
+      65/    FF03 :                     ;	lda	#$A7		; KBD and DSP control register mask
+      66/    FF03 :                     ;	sta	KBDCR		; Enable interrupts, set CA1, CB1 for
+      67/    FF03 :                     ;	sta	DSPCR		;   positive edge sense/output mode
+      68/    FF03 : C9 5F               NOTCR:	cmp	#UNDERSC	; Backspace?
+      69/    FF05 : F0 13               	beq	BACKSPACE	; Yes
+      70/    FF07 : C9 1B               	cmp	#ESC		; ESC?
+      71/    FF09 : F0 03               	beq	ESCAPE		; Yes
+      72/    FF0B : C8                  	iny			; Advance text index
+      73/    FF0C : 10 0F               	bpl	NEXTCHAR	; Auto ESC if > 127
+      74/    FF0E : A9 5C               ESCAPE:	lda	#SLASH		; "\"
+      75/    FF10 : 20 E2 FF            	jsr	ECHO		; Output it
+      76/    FF13 :                     GETLINE:
+      77/    FF13 : A9 0D               	lda	#CR		; CR
+      78/    FF15 : 20 E2 FF            	jsr	ECHO		; Output it
+      79/    FF18 : A0 01               	ldy	#$01		; Initialize text index
+      80/    FF1A :                     BACKSPACE:
+      81/    FF1A : 88                  	dey			; Back up text index
+      82/    FF1B : 30 F6               	bmi	GETLINE		; Beyond start of line, reinitialize
+      83/    FF1D :                     NEXTCHAR:
+      84/    FF1D : 20 ED FF            	jsr	getc
+      85/    FF20 :                     ;	lda	KBDCR		; Key ready?
+      86/    FF20 :                     ;	bpl	NEXTCHAR	; Loop until ready
+      87/    FF20 :                     ;	lda	KBD		; Load character. B7 should be '1'
+      88/    FF20 : 99 00 02            	sta	IN,y		; Add to text buffer
+      89/    FF23 : 20 E2 FF            	jsr	ECHO		; Display character
+      90/    FF26 : C9 0D               	cmp	#CR		; CR?
+      91/    FF28 : D0 D9               	bne	NOTCR		; No
+      92/    FF2A : A0 FF               	ldy	#$FF		; Reset text index
+      93/    FF2C : A9 00               	lda	#$00		; For XAM mode
+      94/    FF2E : AA                  	tax			; 0 -> x
+      95/    FF2F :                     SETSTOR:
+      96/    FF2F : 0A                  	asl			; Leaves $7B if setting STOR mode
+      97/    FF30 :                     SETMODE:
+      98/    FF30 : 85 2B               	sta	MODE		; $00 = XAM, $7B = STOR, $AE = BLOCK XAM
+      99/    FF32 : C8                  BLSKIP:	iny			; Advance text index
+     100/    FF33 :                     NEXTITEM:
+     101/    FF33 : B9 00 02            	lda	IN,y		; Get character
+     102/    FF36 : C9 0D               	cmp	#CR		; CR?
+     103/    FF38 : F0 D9               	beq	GETLINE		; Yes, done this line
+     104/    FF3A : C9 2E               	cmp	#DOT		; "."?
+     105/    FF3C : 90 F4               	bcc	BLSKIP		; Skip delimiter
+     106/    FF3E : D0 04               	BNE	NX1
+     107/    FF40 : A9 AE               	LDA	#$AE		; Set BLOCK XAM mode
+     108/    FF42 : 80 EC               	BRA	SETMODE		; Set BLOCK XAM mode
+     109/    FF44 :                     NX1:	
+     110/    FF44 : C9 3A               	cmp	#COLON		; ":"?
+     111/    FF46 : F0 E7               	beq	SETSTOR		; Yes, set STOR mode
+     112/    FF48 : C9 52               	cmp	#R		; "R"?
+     113/    FF4A : F0 3B               	beq	RUN		; Yes, run user program
+     114/    FF4C : 86 28               	stx	L		; $00 -> L
+     115/    FF4E : 86 29               	stx	H		;   and H
+     116/    FF50 : 84 2A               	sty	YSAV		; Save Y for comparison
+     117/    FF52 :                     NEXTHEX:
+     118/    FF52 : B9 00 02            	lda	IN,y		; Get character for hex test
+     119/    FF55 :                     ;	eor	#$B0		; Map digits to $0-9
+     120/    FF55 : 49 30               	eor	#$30		; Map digits to $0-9
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm - Page 3 - 2021/06/02 21時12分40秒
+
+
+     121/    FF57 : C9 0A               	cmp	#$0A		; Digit?
+     122/    FF59 : 90 06               	bcc	DIG		; Yes
+     123/    FF5B : 69 88               	adc	#$88		; Map letter "A"-"F" to $FA-FF
+     124/    FF5D : C9 FA               	cmp	#$FA		; Hex letter?
+     125/    FF5F : 90 11               	bcc	NOTHEX		; No, character not hext
+     126/    FF61 : 0A                  DIG:	asl
+     127/    FF62 : 0A                  	asl			; Hex digit to MSD of A
+     128/    FF63 : 0A                  	asl
+     129/    FF64 : 0A                  	asl
+     130/    FF65 : A2 04               	ldx	#$04		; Shift count
+     131/    FF67 :                     HEXSHIFT:
+     132/    FF67 : 0A                  	asl			; Hex digit left, MSB to carry
+     133/    FF68 : 26 28               	rol	L		; Rotate into LSD
+     134/    FF6A : 26 29               	rol	H		; Rotate into MSD's
+     135/    FF6C : CA                  	dex			; Done 4 shifts?
+     136/    FF6D : D0 F8               	bne	HEXSHIFT	; No, loop
+     137/    FF6F : C8                  	iny			; Advance text index
+     138/    FF70 : D0 E0               	bne	NEXTHEX		; Always taken. Check next character for hex
+     139/    FF72 :                     NOTHEX:
+     140/    FF72 : C4 2A               	cpy	YSAV		; Check if L, H empty (no hex digits)
+     141/    FF74 : F0 98               	beq	ESCAPE		; Yes, generate ESC sequence
+     142/    FF76 : 24 2B               	bit	MODE		; Test MODE byte
+     143/    FF78 : 50 10               	bvc	NOTSTOR		; B6 = 0 for STOR, 1 for XAM and BLOCK XAM
+     144/    FF7A : A5 28               	lda	L		; LSD's of hex data
+     145/    FF7C : 81 26               	sta	(STL,x)		; Store at current 'store index'
+     146/    FF7E : E6 26               	inc	STL		; Increment store index
+     147/    FF80 : D0 B1               	bne	NEXTITEM	; Get next item (no carry)
+     148/    FF82 : E6 27               	inc	STH		; Add carry to 'store index' high order
+     149/    FF84 :                     TONEXTITEM:
+     150/    FF84 : 4C 33 FF            	jmp	NEXTITEM	; Get next command item
+     151/    FF87 : 6C 24 00            RUN:	jmp	(XAML)		; Run at current XAM index
+     152/    FF8A :                     NOTSTOR:
+     153/    FF8A : 30 2B               	bmi	XAMNEXT		; B7=0 for XAM, 1 for BLOCK XAM [NEW CHECK]
+     154/    FF8C : A2 02               	ldx	#$02		; Byte count
+     155/    FF8E : B5 27               SETADR:	lda	L-1,x		; Copy hex data to
+     156/    FF90 : 95 25               	sta	STL-1,x		;   'store index'
+     157/    FF92 : 95 23               	sta	XAML-1,x	; And to 'XAM index'
+     158/    FF94 : CA                  	dex			; Next of 2 bytes
+     159/    FF95 : D0 F7               	bne	SETADR		; Loop unless X=0
+     160/    FF97 :                     NXTPRNT:
+     161/    FF97 : D0 14               	bne	PRDATA		; NE means no address to print
+     162/    FF99 : A9 0D               	lda	#CR		; CR
+     163/    FF9B : 20 E2 FF            	jsr	ECHO		; Output it
+     164/    FF9E : A5 25               	lda	XAMH		; 'Examine index' high-order byte
+     165/    FFA0 : 20 CF FF            	jsr	PRBYTE		; Output it in hex format
+     166/    FFA3 : A5 24               	lda	XAML		; Low-order 'examine index' byte
+     167/    FFA5 : 20 CF FF            	jsr	PRBYTE		; Output it in hex format
+     168/    FFA8 : A9 3A               	lda	#COLON		; ":"
+     169/    FFAA : 20 E2 FF            	jsr	ECHO		; Output it
+     170/    FFAD : A9 20               PRDATA:	lda	#SPACE		; Blank
+     171/    FFAF : 20 E2 FF            	jsr	ECHO		; Output it
+     172/    FFB2 : A1 24               	lda	(XAML,x)	; Get data byte at 'examine index'
+     173/    FFB4 : 20 CF FF            	jsr	PRBYTE		; Output it in hex format
+     174/    FFB7 :                     XAMNEXT:
+     175/    FFB7 : 86 2B               	stx	MODE		; 0 -> MODE (XAM mode)
+     176/    FFB9 : A5 24               	lda	XAML
+     177/    FFBB : C5 28               	cmp	L		; Compare 'examine index' to hex data
+     178/    FFBD : A5 25               	lda	XAMH
+     179/    FFBF : E5 29               	sbc	H
+     180/    FFC1 : B0 C1               	bcs	TONEXTITEM	; Not less, so no more data to output
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm - Page 4 - 2021/06/02 21時12分40秒
+
+
+     181/    FFC3 : E6 24               	inc	XAML
+     182/    FFC5 : D0 02               	bne	MOD8CHK		; Increment 'examine index'
+     183/    FFC7 : E6 25               	inc	XAMH
+     184/    FFC9 :                     MOD8CHK:
+     185/    FFC9 : A5 24               	lda	XAML		; Check low-order 'examine index' byte
+     186/    FFCB : 29 07               	and	#$07		;   For MOD 8 = 0
+     187/    FFCD : 10 C8               	bpl	NXTPRNT		; Always taken
+     188/    FFCF : 48                  PRBYTE:	pha			; Save A for LSD
+     189/    FFD0 : 4A                  	lsr
+     190/    FFD1 : 4A                  	lsr
+     191/    FFD2 : 4A                  	lsr			; MSD to LSD position
+     192/    FFD3 : 4A                  	lsr
+     193/    FFD4 : 20 D8 FF            	jsr	PRHEX		; Output hex digit
+     194/    FFD7 : 68                  	pla			; Restore A
+     195/    FFD8 : 29 0F               PRHEX:	and	#$0F		; Mask LSD for hex print
+     196/    FFDA : 09 30               	ora	#ZERO		; Add "0"
+     197/    FFDC :                     ;	cmp	#$BA		; Digit?
+     198/    FFDC : C9 3A               	cmp	#$3A		; Digit?
+     199/    FFDE : 90 02               	bcc	ECHO		; Yes, output it
+     200/    FFE0 : 69 06               	adc	#$06		; Add offset for letter
+     201/    FFE2 :                     ECHO:
+     202/    FFE2 :                     ;;; putc
+     203/    FFE2 :                     putc:
+     204/    FFE2 : 8D FB FF            	sta dmach_2
+     205/    FFE5 : 80 02               	bra putc1
+     206/    FFE7 : F7 FF               	FDB dmarq_2
+     207/    FFE9 : CB                  putc1:	wai
+     208/    FFEA : 60                  	rts
+     209/    FFEB :                     	
+     210/    FFEB :                     ;;; getc
+     211/    FFEB : F2 FF               	FDB dmarq_1
+     212/    FFED : CB                  getc:	wai
+     213/    FFEE : AD F6 FF            	lda dmach_1
+     214/    FFF1 : 60                  	rts
+     215/    FFF2 :                     dmarq_1:
+     216/    FFF2 : 01                   	FCB DMA_SIO 		; dmano
+     217/    FFF3 : 05                   	FCB DMA_READ_BLOCK	; read
+     218/    FFF4 : FF FF                	FDB $ffff		; dma request block address (unused for SIO)
+     219/    FFF6 :                     dmach_1:
+     220/    FFF6 : 00                   	FCB 0			; dma data byte
+     221/    FFF7 :                     dmarq_2:
+     222/    FFF7 : 01                   	FCB DMA_SIO 		; dmano
+     223/    FFF8 : 03                   	FCB DMA_WRITE		; write
+     224/    FFF9 : FF FF                	FDB $ffff		; dma request block address (unused for SIO)
+     225/    FFFB :                     dmach_2:
+     226/    FFFB : 00                   	FCB 0			; dma data byte
+     227/    FFFC :                     ; --------------------------------------------------------
+     228/    FFFC :                     	org	$fffc		;
+     229/    FFFC :                     ;	FDB	$0000		; (unused)
+     230/    FFFC :                     ;	FDB	$0F00		; (NMI vector)
+     231/    FFFC : 00 FF               	FDB	RESET		; (RESET vector)
+     232/    FFFE : 00 00               	FDB	$0000		; (IRQ vector)
+     233/   10000 :                     
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm() - Page 5 - 2021/06/02 21時12分40秒
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*ARCHITECTURE :  "x86_64-apple-osx" - |  BACKSPACE :                   FF1A C |
+*BIGENDIAN :                      0 - |  BLSKIP :                      FF32 C |
+*BRANCHEXT :                      0 - | *CASESENSITIVE :                  0 - |
+ COLON :                         3A - | *COMPMODE :                       0 - |
+*CONSTPI :        3.141592653589793 - |  CR :                             D - |
+*CUSTOM :                         0 - | *DATE :                "2021/06/02" - |
+ DIG :                         FF61 C |  DMACH_1 :                     FFF6 C |
+ DMACH_2 :                     FFFB C |  DMARQ_1 :                     FFF2 C |
+ DMARQ_2 :                     FFF7 C | *DMA_HALT :                       0 - |
+*DMA_READ :                       2 - |  DMA_READ_BLOCK :                 5 - |
+*DMA_RESET :                      1 - |  DMA_SIO :                        1 - |
+*DMA_STATUS :                     4 - |  DMA_WRITE :                      3 - |
+ DOT :                           2E - |  ECHO :                        FFE2 C |
+ ESC :                           1B - |  ESCAPE :                      FF0E C |
+*FALSE :                          0 - | *FULLPMMU :                       1 - |
+ GETC :                        FFED C |  GETLINE :                     FF13 C |
+ H :                             29 - | *HAS64 :                          1 - |
+*HASDSP :                         0 - | *HASFPU :                         0 - |
+*HASPMMU :                        0 - |  HEXSHIFT :                    FF67 C |
+ IN :                           200 - | *INEXTMODE :                      0 - |
+*INLWORDMODE :                    0 - | *INMAXMODE :                      0 - |
+*INSRCMODE :                      0 - | *INSUPMODE :                      0 - |
+ L :                             28 - | *LISTON :                         1 - |
+*MACEXP :                         7 - |  MOD8CHK :                     FFC9 C |
+ MODE :                          2B - | *MOMCPU :                     65C02 - |
+*MOMCPUNAME :             "W65C02S" - | *NESTMAX :                      100 - |
+ NEXTCHAR :                    FF1D C |  NEXTHEX :                     FF52 C |
+ NEXTITEM :                    FF33 C |  NOTCR :                       FF03 C |
+ NOTHEX :                      FF72 C |  NOTSTOR :                     FF8A C |
+ NX1 :                         FF44 C |  NXTPRNT :                     FF97 C |
+ OUTPUT_MASK :                    0 - | *PACKING :                        0 - |
+*PADDING :                        1 - |  PRBYTE :                      FFCF C |
+ PRDATA :                      FFAD C |  PRHEX :                       FFD8 C |
+*PUTC :                        FFE2 C |  PUTC1 :                       FFE9 C |
+ R :                             52 - | *RELAXED :                        0 - |
+ RESET :                       FF00 C |  RUN :                         FF87 C |
+ SETADR :                      FF8E C |  SETMODE :                     FF30 C |
+ SETSTOR :                     FF2F C |  SLASH :                         5C - |
+ SPACE :                         20 - |  STH :                           27 - |
+ STL :                           26 - |
+*TIME :               "21\-026\-103\-12612\-027\-120\-12240\-025\-089\-110" - |
+ TONEXTITEM :                  FF84 C | *TRUE :                           1 - |
+ UNDERSC :                       5F - | *VERSION :                     142F - |
+ XAMH :                          25 - |  XAML :                          24 - |
+ XAMNEXT :                     FFB7 C |  YSAV :                          2A - |
+*Z80SYNTAX :                      0 - |  ZERO :                          30 - |
+
+     90 symbols
+     36 unused symbols
+
+ AS V1.42 Beta [Bld 204] - Source File wozmon.asm() - Page 6 - 2021/06/02 21時12分40秒
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.01 seconds assembly time
+
+    233 lines source file
+      2 passes
+      0 errors
+      0 warnings

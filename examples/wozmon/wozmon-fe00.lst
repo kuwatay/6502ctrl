@@ -1,0 +1,339 @@
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm - Page 1 - 2021/06/02 20時02分03秒
+
+
+       1/       0 :                     ; Apple I Monitor ROM
+       2/       0 :                     ; Steve Wozniak
+       3/       0 :                     ; 1976
+       4/       0 :                     ; --------------------------------------------------------
+       5/       0 :                     
+       6/       0 :                     	CPU	W65C02S
+       7/       0 :                     ;.segment "MONITOR"		;
+       8/       0 :                     
+       9/       0 :                     ;.export ECHO
+      10/       0 :                     ;	org $ff00
+      11/    FE00 :                     	org $fe00
+      12/    FE00 :                     ; --------------------------------------------------------
+      13/    FE00 :                     ; Zero page variables
+      14/    FE00 : =$24                XAML	:= $24
+      15/    FE00 : =$25                XAMH	:= $25
+      16/    FE00 : =$26                STL	:= $26
+      17/    FE00 : =$27                STH	:= $27
+      18/    FE00 : =$28                L	:= $28
+      19/    FE00 : =$29                H	:= $29
+      20/    FE00 : =$2A                YSAV	:= $2A
+      21/    FE00 : =$2B                MODE	:= $2B
+      22/    FE00 :                     
+      23/    FE00 : =$2C                DMARQ1  := $2C
+      24/    FE00 : =$2D                DMARQ1_CMD := $2D
+      25/    FE00 : =$30                DMARQ1_DATA := $30
+      26/    FE00 :                     	
+      27/    FE00 : =$31                DMARQ2  := $31
+      28/    FE00 : =$31                DMARQ2_CMD := $31
+      29/    FE00 : =$34                DMARQ2_DATA := $34
+      30/    FE00 :                     	
+      31/    FE00 :                     ; I/O locations
+      32/    FE00 : =$200               IN	:= $0200		; Input buffer is $0200 to $027F
+      33/    FE00 :                     ;KBD	:= $D010		; Keyboard data
+      34/    FE00 :                     ;DSP	:= $D012		; Display data
+      35/    FE00 :                     ;KBDCR	:= $D011		; Keyboard control register
+      36/    FE00 :                     ;DSPCR	:= $D013		; Display control register
+      37/    FE00 :                     
+      38/    FE00 : =$0                 DMA_HALT = 0
+      39/    FE00 : =$1                 DMA_SIO = 1
+      40/    FE00 :                     
+      41/    FE00 : =$1                 DMA_RESET = 1	
+      42/    FE00 : =$2                 DMA_READ = 2
+      43/    FE00 : =$3                 DMA_WRITE = 3	
+      44/    FE00 : =$4                 DMA_STATUS = 4
+      45/    FE00 : =$5                 DMA_READ_BLOCK = 5
+      46/    FE00 :                     	
+      47/    FE00 :                     ;ORIGINAL_WAZ = 1
+      48/    FE00 : =>UNDEFINED         	IFDEF ORIGINAL_WAZ
+      49/    FE00 :                     OUTPUT_MASK = $80
+      50/    FE00 : [48]                	ENDIF
+      51/    FE00 :                     	
+      52/    FE00 : =>UNDEFINED         	IFNDEF ORIGINAL_WAZ
+      53/    FE00 : =$0                 OUTPUT_MASK = $00
+      54/    FE00 : [52]                	ENDIF
+      55/    FE00 :                     	
+      56/    FE00 :                     ; ASCII codes
+      57/    FE00 : =$D                 CR	= $0D | OUTPUT_MASK	; Carriage return
+      58/    FE00 : =$1B                ESC	= $1B | OUTPUT_MASK	; Escape
+      59/    FE00 : =$5C                SLASH	= '\\' | OUTPUT_MASK	; 
+      60/    FE00 : =$5F                UNDERSC = '_' | OUTPUT_MASK	; Underscore (acts as backspace)
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm - Page 2 - 2021/06/02 20時02分03秒
+
+
+      61/    FE00 : =$2E                DOT	= '.' | OUTPUT_MASK	; .
+      62/    FE00 : =$3A                COLON	= ':' | OUTPUT_MASK	; :
+      63/    FE00 : =$52                R	= 'R' | OUTPUT_MASK	; "R"
+      64/    FE00 : =$20                SPACE	= ' ' | OUTPUT_MASK	; blank
+      65/    FE00 : =$30                ZERO	= '0' | OUTPUT_MASK	; "0"
+      66/    FE00 :                     
+      67/    FE00 :                     ; --------------------------------------------------------
+      68/    FE00 : D8                  RESET:	cld			; Clear decimal arithmetic mode
+      69/    FE01 :                     ;	cli
+      70/    FE01 : A0 7F               	ldy	#$7F		; Mask for DSP data direction register
+      71/    FE03 :                     ;	sty	DSP		; Set it up
+      72/    FE03 :                     ;	lda	#$A7		; KBD and DSP control register mask
+      73/    FE03 :                     ;	sta	KBDCR		; Enable interrupts, set CA1, CB1 for
+      74/    FE03 :                     ;	sta	DSPCR		;   positive edge sense/output mode
+      75/    FE03 : C9 5F               NOTCR:	cmp	#UNDERSC	; Backspace?
+      76/    FE05 : F0 13               	beq	BACKSPACE	; Yes
+      77/    FE07 : C9 1B               	cmp	#ESC		; ESC?
+      78/    FE09 : F0 03               	beq	ESCAPE		; Yes
+      79/    FE0B : C8                  	iny			; Advance text index
+      80/    FE0C : 10 0F               	bpl	NEXTCHAR	; Auto ESC if > 127
+      81/    FE0E : A9 5C               ESCAPE:	lda	#SLASH		; "\"
+      82/    FE10 : 20 E4 FE            	jsr	ECHO		; Output it
+      83/    FE13 :                     GETLINE:
+      84/    FE13 : A9 0D               	lda	#CR		; CR
+      85/    FE15 : 20 E4 FE            	jsr	ECHO		; Output it
+      86/    FE18 : A0 01               	ldy	#$01		; Initialize text index
+      87/    FE1A :                     BACKSPACE:
+      88/    FE1A : 88                  	dey			; Back up text index
+      89/    FE1B : 30 F6               	bmi	GETLINE		; Beyond start of line, reinitialize
+      90/    FE1D :                     NEXTCHAR:
+      91/    FE1D : 20 EF FE            	jsr	getc
+      92/    FE20 :                     ;	lda	KBDCR		; Key ready?
+      93/    FE20 :                     ;	bpl	NEXTCHAR	; Loop until ready
+      94/    FE20 :                     ;	lda	KBD		; Load character. B7 should be '1'
+      95/    FE20 : 99 00 02            	sta	IN,y		; Add to text buffer
+      96/    FE23 : 20 E4 FE            	jsr	ECHO		; Display character
+      97/    FE26 : C9 0D               	cmp	#CR		; CR?
+      98/    FE28 : D0 D9               	bne	NOTCR		; No
+      99/    FE2A : A0 FF               	ldy	#$FF		; Reset text index
+     100/    FE2C : A9 00               	lda	#$00		; For XAM mode
+     101/    FE2E : AA                  	tax			; 0 -> x
+     102/    FE2F :                     ;; added
+     103/    FE2F : 80 04               	BRA 	SETSTOR
+     104/    FE31 : A9 AE               SETBLK:	LDA 	#$AE
+     105/    FE33 : 80 01               	BRA	SETMODE
+     106/    FE35 :                     ;; added
+     107/    FE35 :                     SETSTOR:
+     108/    FE35 : 0A                  	asl			; Leaves $7B if setting STOR mode
+     109/    FE36 :                     SETMODE:
+     110/    FE36 : 85 2B               	sta	MODE		; $00 = XAM, $7B = STOR, $AE = BLOCK XAM
+     111/    FE38 :                     				; [ NEW	$3E: BLOCK XAM ]
+     112/    FE38 : C8                  BLSKIP:	iny			; Advance text index
+     113/    FE39 :                     NEXTITEM:
+     114/    FE39 : B9 00 02            	lda	IN,y		; Get character
+     115/    FE3C : C9 0D               	cmp	#CR		; CR?
+     116/    FE3E : F0 D3               	beq	GETLINE		; Yes, done this line
+     117/    FE40 : C9 2E               	cmp	#DOT		; "."?
+     118/    FE42 : 90 F4               	bcc	BLSKIP		; Skip delimiter
+     119/    FE44 :                     ;	beq	SETMODE		; Set BLOCK XAM mode
+     120/    FE44 : F0 EB               	BEQ	SETBLK		; Set BLOCK XAM mode
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm - Page 3 - 2021/06/02 20時02分03秒
+
+
+     121/    FE46 : C9 3A               	cmp	#COLON		; ":"?
+     122/    FE48 : F0 EB               	beq	SETSTOR		; Yes, set STOR mode
+     123/    FE4A : C9 52               	cmp	#R		; "R"?
+     124/    FE4C : F0 3B               	beq	RUN		; Yes, run user program
+     125/    FE4E : 86 28               	stx	L		; $00 -> L
+     126/    FE50 : 86 29               	stx	H		;   and H
+     127/    FE52 : 84 2A               	sty	YSAV		; Save Y for comparison
+     128/    FE54 :                     NEXTHEX:
+     129/    FE54 : B9 00 02            	lda	IN,y		; Get character for hex test
+     130/    FE57 :                     ;	eor	#$B0		; Map digits to $0-9
+     131/    FE57 : 49 30               	eor	#$30		; Map digits to $0-9
+     132/    FE59 : C9 0A               	cmp	#$0A		; Digit?
+     133/    FE5B : 90 06               	bcc	DIG		; Yes
+     134/    FE5D : 69 88               	adc	#$88		; Map letter "A"-"F" to $FA-FF
+     135/    FE5F : C9 FA               	cmp	#$FA		; Hex letter?
+     136/    FE61 : 90 11               	bcc	NOTHEX		; No, character not hext
+     137/    FE63 : 0A                  DIG:	asl
+     138/    FE64 : 0A                  	asl			; Hex digit to MSD of A
+     139/    FE65 : 0A                  	asl
+     140/    FE66 : 0A                  	asl
+     141/    FE67 : A2 04               	ldx	#$04		; Shift count
+     142/    FE69 :                     HEXSHIFT:
+     143/    FE69 : 0A                  	asl			; Hex digit left, MSB to carry
+     144/    FE6A : 26 28               	rol	L		; Rotate into LSD
+     145/    FE6C : 26 29               	rol	H		; Rotate into MSD's
+     146/    FE6E : CA                  	dex			; Done 4 shifts?
+     147/    FE6F : D0 F8               	bne	HEXSHIFT	; No, loop
+     148/    FE71 : C8                  	iny			; Advance text index
+     149/    FE72 : D0 E0               	bne	NEXTHEX		; Always taken. Check next character for hex
+     150/    FE74 :                     NOTHEX:
+     151/    FE74 : C4 2A               	cpy	YSAV		; Check if L, H empty (no hex digits)
+     152/    FE76 : F0 96               	beq	ESCAPE		; Yes, generate ESC sequence
+     153/    FE78 :                     ;  NOT WORK
+     154/    FE78 :                     ;	LDA	#$7f
+     155/    FE78 :                     ;	AND	MODE
+     156/    FE78 :                     ;	BNE	NOTSTOR
+     157/    FE78 :                     ;  NOT WORK
+     158/    FE78 : 24 2B               	bit	MODE		; Test MODE byte [NEW CHECK]
+     159/    FE7A : 50 10               	bvc	NOTSTOR		; B6 = 0 for STOR, 1 for XAM and BLOCK XAM
+     160/    FE7C : A5 28               	lda	L		; LSD's of hex data
+     161/    FE7E : 81 26               	sta	(STL,x)		; Store at current 'store index'
+     162/    FE80 : E6 26               	inc	STL		; Increment store index
+     163/    FE82 : D0 B5               	bne	NEXTITEM	; Get next item (no carry)
+     164/    FE84 : E6 27               	inc	STH		; Add carry to 'store index' high order
+     165/    FE86 :                     TONEXTITEM:
+     166/    FE86 : 4C 39 FE            	jmp	NEXTITEM	; Get next command item
+     167/    FE89 : 6C 24 00            RUN:	jmp	(XAML)		; Run at current XAM index
+     168/    FE8C :                     NOTSTOR:
+     169/    FE8C : 30 2B               	bmi	XAMNEXT		; B7=0 for XAM, 1 for BLOCK XAM [NEW CHECK]
+     170/    FE8E : A2 02               	ldx	#$02		; Byte count
+     171/    FE90 : B5 27               SETADR:	lda	L-1,x		; Copy hex data to
+     172/    FE92 : 95 25               	sta	STL-1,x		;   'store index'
+     173/    FE94 : 95 23               	sta	XAML-1,x	; And to 'XAM index'
+     174/    FE96 : CA                  	dex			; Next of 2 bytes
+     175/    FE97 : D0 F7               	bne	SETADR		; Loop unless X=0
+     176/    FE99 :                     NXTPRNT:
+     177/    FE99 : D0 14               	bne	PRDATA		; NE means no address to print
+     178/    FE9B : A9 0D               	lda	#CR		; CR
+     179/    FE9D : 20 E4 FE            	jsr	ECHO		; Output it
+     180/    FEA0 : A5 25               	lda	XAMH		; 'Examine index' high-order byte
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm - Page 4 - 2021/06/02 20時02分03秒
+
+
+     181/    FEA2 : 20 D1 FE            	jsr	PRBYTE		; Output it in hex format
+     182/    FEA5 : A5 24               	lda	XAML		; Low-order 'examine index' byte
+     183/    FEA7 : 20 D1 FE            	jsr	PRBYTE		; Output it in hex format
+     184/    FEAA : A9 3A               	lda	#COLON		; ":"
+     185/    FEAC : 20 E4 FE            	jsr	ECHO		; Output it
+     186/    FEAF : A9 20               PRDATA:	lda	#SPACE		; Blank
+     187/    FEB1 : 20 E4 FE            	jsr	ECHO		; Output it
+     188/    FEB4 : A1 24               	lda	(XAML,x)	; Get data byte at 'examine index'
+     189/    FEB6 : 20 D1 FE            	jsr	PRBYTE		; Output it in hex format
+     190/    FEB9 :                     XAMNEXT:
+     191/    FEB9 : 86 2B               	stx	MODE		; 0 -> MODE (XAM mode)
+     192/    FEBB : A5 24               	lda	XAML
+     193/    FEBD : C5 28               	cmp	L		; Compare 'examine index' to hex data
+     194/    FEBF : A5 25               	lda	XAMH
+     195/    FEC1 : E5 29               	sbc	H
+     196/    FEC3 : B0 C1               	bcs	TONEXTITEM	; Not less, so no more data to output
+     197/    FEC5 : E6 24               	inc	XAML
+     198/    FEC7 : D0 02               	bne	MOD8CHK		; Increment 'examine index'
+     199/    FEC9 : E6 25               	inc	XAMH
+     200/    FECB :                     MOD8CHK:
+     201/    FECB : A5 24               	lda	XAML		; Check low-order 'examine index' byte
+     202/    FECD : 29 07               	and	#$07		;   For MOD 8 = 0
+     203/    FECF : 10 C8               	bpl	NXTPRNT		; Always taken
+     204/    FED1 : 48                  PRBYTE:	pha			; Save A for LSD
+     205/    FED2 : 4A                  	lsr
+     206/    FED3 : 4A                  	lsr
+     207/    FED4 : 4A                  	lsr			; MSD to LSD position
+     208/    FED5 : 4A                  	lsr
+     209/    FED6 : 20 DA FE            	jsr	PRHEX		; Output hex digit
+     210/    FED9 : 68                  	pla			; Restore A
+     211/    FEDA : 29 0F               PRHEX:	and	#$0F		; Mask LSD for hex print
+     212/    FEDC : 09 30               	ora	#ZERO		; Add "0"
+     213/    FEDE :                     ;	cmp	#$BA		; Digit?
+     214/    FEDE : C9 3A               	cmp	#$3A		; Digit?
+     215/    FEE0 : 90 02               	bcc	ECHO		; Yes, output it
+     216/    FEE2 : 69 06               	adc	#$06		; Add offset for letter
+     217/    FEE4 :                     ECHO:
+     218/    FEE4 :                     ;;; putc
+     219/    FEE4 :                     putc:
+     220/    FEE4 : 8D FD FE            	sta dmach_2
+     221/    FEE7 : 80 02               	bra putc1
+     222/    FEE9 : F9 FE               	FDB dmarq_2
+     223/    FEEB : CB                  putc1:	wai
+     224/    FEEC : 60                  	rts
+     225/    FEED :                     	
+     226/    FEED :                     ;;; getc
+     227/    FEED : F4 FE               	FDB dmarq_1
+     228/    FEEF : CB                  getc:	wai
+     229/    FEF0 : AD F8 FE            	lda dmach_1
+     230/    FEF3 : 60                  	rts
+     231/    FEF4 :                     dmarq_1:
+     232/    FEF4 : 01                   	FCB DMA_SIO 		; dmano
+     233/    FEF5 : 05                   	FCB DMA_READ_BLOCK	; read
+     234/    FEF6 : FF FF                	FDB $ffff		; dma request block address (unused for SIO)
+     235/    FEF8 :                     dmach_1:
+     236/    FEF8 : 00                   	FCB 0			; dma data byte
+     237/    FEF9 :                     dmarq_2:
+     238/    FEF9 : 01                   	FCB DMA_SIO 		; dmano
+     239/    FEFA : 03                   	FCB DMA_WRITE		; write
+     240/    FEFB : FF FF                	FDB $ffff		; dma request block address (unused for SIO)
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm - Page 5 - 2021/06/02 20時02分03秒
+
+
+     241/    FEFD :                     dmach_2:
+     242/    FEFD : 00                   	FCB 0			; dma data byte
+     243/    FEFE :                     ; --------------------------------------------------------
+     244/    FFFA :                     	org	$fffa		;
+     245/    FFFA :                     ;	FDB	$0000		; (unused)
+     246/    FFFA : 00 0F               	FDB	$0F00		; (NMI vector)
+     247/    FFFC : 00 FE               	FDB	RESET		; (RESET vector)
+     248/    FFFE : 00 00               	FDB	$0000		; (IRQ vector)
+     249/   10000 :                     
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm() - Page 6 - 2021/06/02 20時02分03秒
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*ARCHITECTURE :  "x86_64-apple-osx" - |  BACKSPACE :                   FE1A C |
+*BIGENDIAN :                      0 - |  BLSKIP :                      FE38 C |
+*BRANCHEXT :                      0 - | *CASESENSITIVE :                  0 - |
+ COLON :                         3A - | *COMPMODE :                       0 - |
+*CONSTPI :        3.141592653589793 - |  CR :                             D - |
+*CUSTOM :                         0 - | *DATE :                "2021/06/02" - |
+ DIG :                         FE63 C |  DMACH_1 :                     FEF8 C |
+ DMACH_2 :                     FEFD C | *DMARQ1 :                        2C - |
+*DMARQ1_CMD :                    2D - | *DMARQ1_DATA :                   30 - |
+*DMARQ2 :                        31 - | *DMARQ2_CMD :                    31 - |
+*DMARQ2_DATA :                   34 - |  DMARQ_1 :                     FEF4 C |
+ DMARQ_2 :                     FEF9 C | *DMA_HALT :                       0 - |
+*DMA_READ :                       2 - |  DMA_READ_BLOCK :                 5 - |
+*DMA_RESET :                      1 - |  DMA_SIO :                        1 - |
+*DMA_STATUS :                     4 - |  DMA_WRITE :                      3 - |
+ DOT :                           2E - |  ECHO :                        FEE4 C |
+ ESC :                           1B - |  ESCAPE :                      FE0E C |
+*FALSE :                          0 - | *FULLPMMU :                       1 - |
+ GETC :                        FEEF C |  GETLINE :                     FE13 C |
+ H :                             29 - | *HAS64 :                          1 - |
+*HASDSP :                         0 - | *HASFPU :                         0 - |
+*HASPMMU :                        0 - |  HEXSHIFT :                    FE69 C |
+ IN :                           200 - | *INEXTMODE :                      0 - |
+*INLWORDMODE :                    0 - | *INMAXMODE :                      0 - |
+*INSRCMODE :                      0 - | *INSUPMODE :                      0 - |
+ L :                             28 - | *LISTON :                         1 - |
+*MACEXP :                         7 - |  MOD8CHK :                     FECB C |
+ MODE :                          2B - | *MOMCPU :                     65C02 - |
+*MOMCPUNAME :             "W65C02S" - | *NESTMAX :                      100 - |
+ NEXTCHAR :                    FE1D C |  NEXTHEX :                     FE54 C |
+ NEXTITEM :                    FE39 C |  NOTCR :                       FE03 C |
+ NOTHEX :                      FE74 C |  NOTSTOR :                     FE8C C |
+ NXTPRNT :                     FE99 C |  OUTPUT_MASK :                    0 - |
+*PACKING :                        0 - | *PADDING :                        1 - |
+ PRBYTE :                      FED1 C |  PRDATA :                      FEAF C |
+ PRHEX :                       FEDA C | *PUTC :                        FEE4 C |
+ PUTC1 :                       FEEB C |  R :                             52 - |
+*RELAXED :                        0 - |  RESET :                       FE00 C |
+ RUN :                         FE89 C |  SETADR :                      FE90 C |
+ SETBLK :                      FE31 C |  SETMODE :                     FE36 C |
+ SETSTOR :                     FE35 C |  SLASH :                         5C - |
+ SPACE :                         20 - |  STH :                           27 - |
+ STL :                           26 - |
+*TIME :               "20\-026\-103\-12602\-027\-120\-12203\-025\-089\-110" - |
+ TONEXTITEM :                  FE86 C | *TRUE :                           1 - |
+ UNDERSC :                       5F - | *VERSION :                     142F - |
+ XAMH :                          25 - |  XAML :                          24 - |
+ XAMNEXT :                     FEB9 C |  YSAV :                          2A - |
+*Z80SYNTAX :                      0 - |  ZERO :                          30 - |
+
+     96 symbols
+     42 unused symbols
+
+ AS V1.42 Beta [Bld 204] - Source File wozmon-fe00.asm() - Page 7 - 2021/06/02 20時02分03秒
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.00 seconds assembly time
+
+    249 lines source file
+      2 passes
+      0 errors
+      0 warnings

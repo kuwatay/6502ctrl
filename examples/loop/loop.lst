@@ -1,0 +1,19 @@
+Sections:
+00: "seg200" (200-203)
+
+
+Source: "loop.asm"
+                        	     1: ; @file loop.asm: simple loop
+                        	     2: ;  use vasm for assemble
+                        	     3: ;  vasm6502_oldstyle -Fbin -dotdir -L loop.lst loop.asm
+                        	     4:         .org 200h
+                        	     5: 
+00:0200 4C0002          	     6: loop:	jmp loop
+                        	     7: 
+
+
+Symbols by name:
+loop                             A:0200
+
+Symbols by value:
+0200 loop
