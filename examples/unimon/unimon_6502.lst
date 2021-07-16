@@ -1,0 +1,1571 @@
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 1 - 2021/07/14 19時45分35秒
+
+
+       1/       0 :                     ;;;
+       2/       0 :                     ;;; Universal Monitor 6502
+       3/       0 :                     ;;;   Copyright (C) 2019 Haruo Asano
+       4/       0 :                     ;;;
+       5/       0 :                     
+       6/       0 :                     	CPU	W65C02S
+       7/       0 :                     
+       8/       0 : ="6502"             TARGET:	EQU	"6502"
+       9/       0 :                     
+      10/       0 :                     	INCLUDE	"config.inc"
+(1)    1/       0 :                     ;;; -*- asm -*-
+(1)    2/       0 :                     ;;;
+(1)    3/       0 :                     ;;; Universal Monitor 6502 config file (6502ctrl)
+(1)    4/       0 :                     ;;;
+(1)    5/       0 :                     
+(1)    6/       0 :                     ;;;
+(1)    7/       0 :                     ;;; Memory
+(1)    8/       0 :                     ;;;
+(1)    9/       0 :                     
+(1)   10/       0 : =$F600              ROM_B:	EQU	$F600
+(1)   11/       0 : =$FF80              ENTRY:	EQU	$FF80		; Entry point
+(1)   12/       0 :                     	
+(1)   13/       0 : =$0                 WORK_B:	EQU	$0000		; Must fit in ZERO page
+(1)   14/       0 : =$1FF               STACK:	EQU	$01FF
+(1)   15/       0 :                     
+(1)   16/       0 : =$10                BUFLEN:	EQU	16		; Buffer length ( 16 or above )
+(1)   17/       0 :                     
+(1)   18/       0 :                     ;;;
+(1)   19/       0 :                     ;;;  Options
+(1)   20/       0 :                     ;;;
+(1)   21/       0 :                     
+(1)   22/       0 : =$1                 USE_IDENT = 1			; CPU Identification
+(1)   23/       0 : =$1                 USE_REGCMD = 1			; Register related commands
+(1)   24/       0 :                     	
+(1)   25/       0 :                     ;;;
+(1)   26/       0 :                     ;;; MOS Technology MCS6551
+(1)   27/       0 :                     ;;;
+(1)   28/       0 :                     
+(1)   29/       0 : =$0                 USE_DEV_6551 = 0
+(1)   30/       0 : =>FALSE             	IF USE_DEV_6551
+(1)   31/       0 :                     	;;
+(1)   32/       0 :                     ACIADR:	EQU	$8000		; Data Register
+(1)   33/       0 :                     ACIASR:	EQU	$8001		; Status Register
+(1)   34/       0 :                     ACIACM:	EQU	$8002		; Command Register
+(1)   35/       0 :                     ACIACR:	EQU	$8003		; Control Register
+(1)   36/       0 :                     ACCR_V:	EQU	$1E		; Control: 8bit, 9600bps
+(1)   37/       0 :                     ACCM_V:	EQU	$0B		; Command: No-parity
+(1)   38/       0 : [30]                	ENDIF
+(1)   39/       0 :                     
+(1)   40/       0 :                     ;;;
+(1)   41/       0 :                     ;;; Motorola MC6850 (ACIA)
+(1)   42/       0 :                     ;;;
+(1)   43/       0 :                     
+(1)   44/       0 : =$0                 USE_DEV_6850 = 0
+(1)   45/       0 : =>FALSE             	IF USE_DEV_6850
+(1)   46/       0 :                     	;;
+(1)   47/       0 :                     ACIAC:	EQU	$8018		; Control / Status Register
+(1)   48/       0 :                     ACIAD:	EQU	$8019		; Data Register
+(1)   49/       0 : [45]                	ENDIF
+(1)   50/       0 :                     
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm(config.inc) - Page 2 - 2021/07/14 19時45分35秒
+
+
+(1)   51/       0 :                     ;;;
+(1)   52/       0 :                     ;;; EMILY Board (Shared Memory)
+(1)   53/       0 :                     ;;;
+(1)   54/       0 :                     
+(1)   55/       0 : =$0                 USE_DEV_EMILY = 0
+(1)   56/       0 : =>FALSE             	IF USE_DEV_EMILY
+(1)   57/       0 :                     	;;
+(1)   58/       0 :                     SMBASE:	EQU	$FFE0
+(1)   59/       0 : [56]                	ENDIF
+(1)   60/       0 :                     
+(1)   61/       0 :                     ;;;
+(1)   62/       0 :                     ;;; 6502ctrl DMA mode
+(1)   63/       0 :                     ;;;
+(1)   64/       0 : =$1                 USE_DEV_6502CTRL = 1
+(1)   65/       0 : =>TRUE              	IF USE_DEV_6502CTRL
+(1)   66/       0 :                     	;;
+(1)   67/       0 : =$0                 DMA_HALT EQU	0
+(1)   68/       0 : =$1                 DMA_SIO	EQU	1
+(1)   69/       0 :                     
+(1)   70/       0 : =$1                 DMA_RESET EQU	1	
+(1)   71/       0 : =$2                 DMA_READ EQU	2
+(1)   72/       0 : =$3                 DMA_WRITE EQU 	3	
+(1)   73/       0 : =$4                 DMA_STATUS EQU 	4
+(1)   74/       0 : [65]                	ENDIF
+(1)   75/       0 :                     	
+(1)   76/       0 :                     
+      11/       0 :                     
+      12/       0 :                     	INCLUDE "common.inc"
+(1)    1/       0 :                     ;;; -*- asm -*-
+(1)    2/       0 :                     ;;;
+(1)    3/       0 :                     ;;; Common header file
+(1)    4/       0 :                     ;;;
+(1)    5/       0 :                     
+(1)    6/       0 :                     	RELAXED	ON
+(1)    7/       0 :                     
+(1)    8/       0 :                     ;;; Constants
+(1)    9/       0 : =$D                 CR:	EQU	0x0D
+(1)   10/       0 : =$A                 LF:	EQU	0x0A
+(1)   11/       0 : =$8                 BS:	EQU	0x08
+(1)   12/       0 : =$7F                DEL:	EQU	0x7F
+(1)   13/       0 :                     
+(1)   14/       0 :                     ;;; Functions
+(1)   15/       0 :                     low	function	x,(x & 255)
+(1)   16/       0 :                     high	function	x,(x >> 8)
+(1)   17/       0 :                     
+(1)   18/       0 :                     	RELAXED	OFF
+(1)   19/       0 :                     
+      13/       0 :                     
+      14/       0 :                     ;;;
+      15/       0 :                     ;;; ROM area
+      16/       0 :                     ;;;
+      17/       0 :                     
+      18/    F600 :                     	ORG	ROM_B
+      19/    F600 :                     
+      20/    F600 :                     CSTART:
+      21/    F600 : A2 FF               	LDX	#low(STACK)
+      22/    F602 : 9A                  	TXS
+      23/    F603 : 20 1B FD            	JSR	INIT
+      24/    F606 :                     
+      25/    F606 : A9 00               	LDA	#$00
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 3 - 2021/07/14 19時45分35秒
+
+
+      26/    F608 : 85 10               	STA	DSADDR
+      27/    F60A : 85 11               	STA	DSADDR+1
+      28/    F60C : 85 17               	STA	SADDR
+      29/    F60E : 85 18               	STA	SADDR+1
+      30/    F610 : 85 15               	STA	GADDR
+      31/    F612 : 85 16               	STA	GADDR+1
+      32/    F614 : 85 1B               	STA	PSPEC
+      33/    F616 : A9 53               	LDA	#'S'
+      34/    F618 : 85 19               	STA	HEXMOD
+      35/    F61A :                     
+      36/    F61A : =>TRUE              	IF USE_REGCMD
+      37/    F61A : A9 00               	LDA	#$00
+      38/    F61C : 85 1C               	STA	REGA
+      39/    F61E : 85 1D               	STA	REGX
+      40/    F620 : 85 1E               	STA	REGY
+      41/    F622 : 85 20               	STA	REGPC
+      42/    F624 : 85 21               	STA	REGPC+1
+      43/    F626 : 85 22               	STA	REGPSR
+      44/    F628 : BA                  	TSX
+      45/    F629 : 86 1F               	STX	REGSP
+      46/    F62B : [36]                	ENDIF
+      47/    F62B :                     	
+      48/    F62B :                     	;; Opening message
+      49/    F62B : A9 10               	LDA	#low(OPNMSG)
+      50/    F62D : 85 28               	STA	PT0
+      51/    F62F : A9 FC               	LDA	#high(OPNMSG)
+      52/    F631 : 85 29               	STA	PT0+1
+      53/    F633 : 20 E2 FA            	JSR	STROUT
+      54/    F636 :                     
+      55/    F636 :                     	;; CPU identification
+      56/    F636 : =>TRUE              	IF USE_IDENT
+      57/    F636 : 80 18               	FCB	$80,ID65C-*-2	; BRA ID65C on 65C02, NOP #xx on 6502
+      58/    F638 :                     
+      59/    F638 : F8                  	SED
+      60/    F639 : 18                  	CLC
+      61/    F63A : A9 05               	LDA	#5
+      62/    F63C : 69 05               	ADC	#5
+      63/    F63E : C9 0A               	CMP	#10
+      64/    F640 : D8                  	CLD
+      65/    F641 : F0 2D               	BEQ	ID2A03
+      66/    F643 :                     	;; 6502
+      67/    F643 : A9 72               	LDA	#low(IM65)
+      68/    F645 : 85 28               	STA	PT0
+      69/    F647 : A9 FC               	LDA	#high(IM65)
+      70/    F649 : 85 29               	STA	PT0+1
+      71/    F64B : A9 00               	LDA	#$00
+      72/    F64D : 4C 7A F6            	JMP	IDE
+      73/    F650 :                     	;; 65C02
+      74/    F650 :                     ID65C:
+      75/    F650 : 0F A9 10            	FCB	$0F,$A9,IDR65C-*-3 ; BBR0 $A9,IDR65C on R65C02, NOP / LDA,#xx on 65C02
+      76/    F653 : 8F A9 0D            	FCB	$8F,$A9,IDR65C-*-3 ; BBS0 $A9,IDR65C on R65C02, NOP / LDA,#xx on 65C02
+      77/    F656 :                     	
+      78/    F656 : A9 79               	LDA	#low(IM65C)
+      79/    F658 : 85 28               	STA	PT0
+      80/    F65A : A9 FC               	LDA	#high(IM65C)
+      81/    F65C : 85 29               	STA	PT0+1
+      82/    F65E : A9 01               	LDA	#$01
+      83/    F660 : 4C 7A F6            	JMP	IDE
+      84/    F663 :                     	;; R65C02
+      85/    F663 :                     IDR65C:
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 4 - 2021/07/14 19時45分35秒
+
+
+      86/    F663 : A9 81               	LDA	#low(IMR65C)
+      87/    F665 : 85 28               	STA	PT0
+      88/    F667 : A9 FC               	LDA	#high(IMR65C)
+      89/    F669 : 85 29               	STA	PT0+1
+      90/    F66B : A9 03               	LDA	#$03
+      91/    F66D : 4C 7A F6            	JMP	IDE
+      92/    F670 :                     	;; RP2A03
+      93/    F670 :                     ID2A03:
+      94/    F670 : A9 91               	LDA	#low(IM2A03)
+      95/    F672 : 85 28               	STA	PT0
+      96/    F674 : A9 FC               	LDA	#high(IM2A03)
+      97/    F676 : 85 29               	STA	PT0+1
+      98/    F678 : A9 10               	LDA	#$10	
+      99/    F67A :                     IDE:
+     100/    F67A : 85 1B               	STA	PSPEC
+     101/    F67C : 20 E2 FA            	JSR	STROUT
+     102/    F67F : [56]                	ENDIF
+     103/    F67F :                     
+     104/    F67F :                     WSTART:
+     105/    F67F : A9 2B               	LDA	#low(PROMPT)
+     106/    F681 : 85 28               	STA	PT0
+     107/    F683 : A9 FC               	LDA	#high(PROMPT)
+     108/    F685 : 85 29               	STA	PT0+1
+     109/    F687 : 20 E2 FA            	JSR	STROUT
+     110/    F68A : 20 3D FB            	JSR	GETLIN
+     111/    F68D : A2 00               	LDX	#0
+     112/    F68F : 20 86 FB            	JSR	SKIPSP
+     113/    F692 : 20 91 FB            	JSR	UPPER
+     114/    F695 : C9 00               	CMP	#0
+     115/    F697 : F0 E6               	BEQ	WSTART
+     116/    F699 :                     
+     117/    F699 : C9 44               	CMP	#'D'
+     118/    F69B : D0 03               	BNE	M00
+     119/    F69D : 4C CA F6            	JMP	DUMP
+     120/    F6A0 :                     M00:
+     121/    F6A0 : C9 47               	CMP	#'G'
+     122/    F6A2 : D0 03               	BNE	M01
+     123/    F6A4 : 4C FF F7            	JMP	GO
+     124/    F6A7 :                     M01:
+     125/    F6A7 : C9 53               	CMP	#'S'
+     126/    F6A9 : D0 03               	BNE	M02
+     127/    F6AB : 4C 2C F8            	JMP	SETM
+     128/    F6AE :                     M02:
+     129/    F6AE : C9 4C               	CMP	#'L'
+     130/    F6B0 : D0 03               	BNE	M03
+     131/    F6B2 : 4C B4 F8            	JMP	LOADH
+     132/    F6B5 :                     M03:
+     133/    F6B5 :                     	
+     134/    F6B5 : =>TRUE              	IF USE_REGCMD
+     135/    F6B5 : C9 52               	CMP	#'R'
+     136/    F6B7 : D0 03               	BNE	M05
+     137/    F6B9 : 4C BB F9            	JMP	REG
+     138/    F6BC : [134]               	ENDIF
+     139/    F6BC :                     M05:	
+     140/    F6BC :                     ERR:
+     141/    F6BC : A9 48               	LDA	#low(ERRMSG)
+     142/    F6BE : 85 28               	STA	PT0
+     143/    F6C0 : A9 FC               	LDA	#high(ERRMSG)
+     144/    F6C2 : 85 29               	STA	PT0+1
+     145/    F6C4 : 20 E2 FA            	JSR	STROUT
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 5 - 2021/07/14 19時45分35秒
+
+
+     146/    F6C7 : 4C 7F F6            	JMP	WSTART
+     147/    F6CA :                     
+     148/    F6CA :                     ;;;
+     149/    F6CA :                     ;;; Dump memory
+     150/    F6CA :                     ;;;
+     151/    F6CA :                     DUMP:
+     152/    F6CA : E8                  	INX
+     153/    F6CB : 20 86 FB            	JSR	SKIPSP
+     154/    F6CE : 20 9C FB            	JSR	RDHEX
+     155/    F6D1 : A5 2C               	LDA	CNT
+     156/    F6D3 : D0 17               	BNE	DP0
+     157/    F6D5 :                     
+     158/    F6D5 :                     	;; No arg.
+     159/    F6D5 : 20 86 FB            	JSR	SKIPSP
+     160/    F6D8 : B5 00               	LDA	INBUF,X
+     161/    F6DA : D0 E0               	BNE	ERR
+     162/    F6DC :                     DP00:	
+     163/    F6DC : A5 10               	LDA	DSADDR
+     164/    F6DE : 18                  	CLC
+     165/    F6DF : 69 80               	ADC	#128
+     166/    F6E1 : 85 12               	STA	DEADDR
+     167/    F6E3 : A5 11               	LDA	DSADDR+1
+     168/    F6E5 : 69 00               	ADC	#0
+     169/    F6E7 : 85 13               	STA	DEADDR+1
+     170/    F6E9 : 4C 23 F7            	JMP	DPM
+     171/    F6EC :                     
+     172/    F6EC :                     	;; 1st arg. found
+     173/    F6EC :                     DP0:
+     174/    F6EC : A5 2A               	LDA	PT1
+     175/    F6EE : 85 10               	STA	DSADDR
+     176/    F6F0 : A5 2B               	LDA	PT1+1
+     177/    F6F2 : 85 11               	STA	DSADDR+1
+     178/    F6F4 : 20 86 FB            	JSR	SKIPSP
+     179/    F6F7 : B5 00               	LDA	INBUF,X
+     180/    F6F9 : C9 2C               	CMP	#','
+     181/    F6FB : F0 07               	BEQ	DP1
+     182/    F6FD : C9 00               	CMP	#0
+     183/    F6FF : D0 BB               	BNE	ERR
+     184/    F701 :                     	;; No 2nd arg.
+     185/    F701 : 4C DC F6            	JMP	DP00
+     186/    F704 :                     DP1:
+     187/    F704 : E8                  	INX
+     188/    F705 : 20 86 FB            	JSR	SKIPSP
+     189/    F708 : 20 9C FB            	JSR	RDHEX
+     190/    F70B : 20 86 FB            	JSR	SKIPSP
+     191/    F70E : A5 2C               	LDA	CNT
+     192/    F710 : F0 AA               	BEQ	ERR
+     193/    F712 : B5 00               	LDA	INBUF,X
+     194/    F714 : D0 A6               	BNE	ERR
+     195/    F716 : A5 2A               	LDA	PT1
+     196/    F718 : 38                  	SEC
+     197/    F719 : 69 00               	ADC	#0
+     198/    F71B : 85 12               	STA	DEADDR
+     199/    F71D : A5 2B               	LDA	PT1+1
+     200/    F71F : 69 00               	ADC	#0
+     201/    F721 : 85 13               	STA	DEADDR+1
+     202/    F723 :                     
+     203/    F723 :                     	;; DUMP main
+     204/    F723 :                     DPM:	
+     205/    F723 : A5 10               	LDA	DSADDR
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 6 - 2021/07/14 19時45分35秒
+
+
+     206/    F725 : 29 F0               	AND	#$F0
+     207/    F727 : 85 2A               	STA	PT1
+     208/    F729 : A5 11               	LDA	DSADDR+1
+     209/    F72B : 85 2B               	STA	PT1+1
+     210/    F72D : A9 00               	LDA	#0
+     211/    F72F : 85 14               	STA	DSTATE
+     212/    F731 :                     DPM0:
+     213/    F731 : 20 65 F7            	JSR	DPL
+     214/    F734 : A5 2A               	LDA	PT1
+     215/    F736 : 18                  	CLC
+     216/    F737 : 69 10               	ADC	#16
+     217/    F739 : 85 2A               	STA	PT1
+     218/    F73B : A5 2B               	LDA	PT1+1
+     219/    F73D : 69 00               	ADC	#0
+     220/    F73F : 85 2B               	STA	PT1+1
+     221/    F741 : 20 2A FD            	JSR	CONST
+     222/    F744 : D0 11               	BNE	DPM1
+     223/    F746 : A5 14               	LDA	DSTATE
+     224/    F748 : C9 02               	CMP	#2
+     225/    F74A : 90 E5               	BCC	DPM0
+     226/    F74C : A5 12               	LDA	DEADDR
+     227/    F74E : 85 10               	STA	DSADDR
+     228/    F750 : A5 13               	LDA	DEADDR+1
+     229/    F752 : 85 11               	STA	DSADDR+1
+     230/    F754 : 4C 7F F6            	JMP	WSTART
+     231/    F757 :                     DPM1:
+     232/    F757 : A5 2A               	LDA	PT1
+     233/    F759 : 85 10               	STA	DSADDR
+     234/    F75B : A5 2B               	LDA	PT1+1
+     235/    F75D : 85 11               	STA	DSADDR+1
+     236/    F75F : 20 1E FD            	JSR	CONIN
+     237/    F762 : 4C 7F F6            	JMP	WSTART
+     238/    F765 :                     
+     239/    F765 :                     	;; Dump line
+     240/    F765 :                     DPL:
+     241/    F765 : A5 2B               	LDA	PT1+1
+     242/    F767 : 20 F0 FA            	JSR	HEXOUT2
+     243/    F76A : A5 2A               	LDA	PT1
+     244/    F76C : 20 F0 FA            	JSR	HEXOUT2
+     245/    F76F : A9 50               	LDA	#low(DSEP0)
+     246/    F771 : 85 28               	STA	PT0
+     247/    F773 : A9 FC               	LDA	#high(DSEP0)
+     248/    F775 : 85 29               	STA	PT0+1
+     249/    F777 : 20 E2 FA            	JSR	STROUT
+     250/    F77A : A2 00               	LDX	#0
+     251/    F77C : A0 00               	LDY	#0
+     252/    F77E :                     DPL0:
+     253/    F77E : 20 AF F7            	JSR	DPB
+     254/    F781 : E0 10               	CPX	#16
+     255/    F783 : D0 F9               	BNE	DPL0
+     256/    F785 :                     
+     257/    F785 : A9 53               	LDA	#low(DSEP1)
+     258/    F787 : 85 28               	STA	PT0
+     259/    F789 : A9 FC               	LDA	#high(DSEP1)
+     260/    F78B : 85 29               	STA	PT0+1
+     261/    F78D : 20 E2 FA            	JSR	STROUT
+     262/    F790 :                     
+     263/    F790 :                     	;; Print ASCII area
+     264/    F790 : A2 00               	LDX	#0
+     265/    F792 :                     DPL1:
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 7 - 2021/07/14 19時45分35秒
+
+
+     266/    F792 : B5 00               	LDA	INBUF,X
+     267/    F794 : C9 20               	CMP	#' '
+     268/    F796 : 90 0A               	BCC	DPL2
+     269/    F798 : C9 7F               	CMP	#$7F
+     270/    F79A : B0 06               	BCS	DPL2
+     271/    F79C : 20 36 FD            	JSR	CONOUT
+     272/    F79F : 4C A7 F7            	JMP	DPL3
+     273/    F7A2 :                     DPL2:
+     274/    F7A2 : A9 2E               	LDA	#'.'
+     275/    F7A4 : 20 36 FD            	JSR	CONOUT
+     276/    F7A7 :                     DPL3:
+     277/    F7A7 : E8                  	INX
+     278/    F7A8 : E0 10               	CPX	#16
+     279/    F7AA : D0 E6               	BNE	DPL1
+     280/    F7AC : 4C 33 FB            	JMP	CRLF
+     281/    F7AF :                     
+     282/    F7AF :                     	;; Dump byte
+     283/    F7AF :                     DPB:
+     284/    F7AF : A9 20               	LDA	#' '
+     285/    F7B1 : 20 36 FD            	JSR	CONOUT
+     286/    F7B4 : A5 14               	LDA	DSTATE
+     287/    F7B6 : D0 1B               	BNE	DPB2
+     288/    F7B8 :                     	;; Dump state 0
+     289/    F7B8 : 98                  	TYA
+     290/    F7B9 : 38                  	SEC
+     291/    F7BA : E5 10               	SBC	DSADDR
+     292/    F7BC : 29 0F               	AND	#$0F
+     293/    F7BE : F0 0F               	BEQ	DPB1
+     294/    F7C0 :                     	;; Still 0 or 2
+     295/    F7C0 :                     DPB0:
+     296/    F7C0 : A9 20               	LDA	#' '
+     297/    F7C2 : 95 00               	STA	INBUF,X
+     298/    F7C4 : 20 36 FD            	JSR	CONOUT
+     299/    F7C7 : A9 20               	LDA	#' '
+     300/    F7C9 : 20 36 FD            	JSR	CONOUT
+     301/    F7CC : E8                  	INX
+     302/    F7CD : C8                  	INY
+     303/    F7CE : 60                  	RTS
+     304/    F7CF :                     	;; Found start address
+     305/    F7CF :                     DPB1:
+     306/    F7CF : A9 01               	LDA	#1
+     307/    F7D1 : 85 14               	STA	DSTATE
+     308/    F7D3 :                     DPB2:
+     309/    F7D3 : A5 14               	LDA	DSTATE
+     310/    F7D5 : C9 01               	CMP	#1
+     311/    F7D7 : D0 E7               	BNE	DPB0
+     312/    F7D9 :                     	;; Dump state 1
+     313/    F7D9 : B1 2A               	LDA	(PT1),Y
+     314/    F7DB : 95 00               	STA	INBUF,X
+     315/    F7DD : 20 F0 FA            	JSR	HEXOUT2
+     316/    F7E0 : E8                  	INX
+     317/    F7E1 : C8                  	INY
+     318/    F7E2 : 98                  	TYA
+     319/    F7E3 : 18                  	CLC
+     320/    F7E4 : 65 2A               	ADC	PT1
+     321/    F7E6 : 85 28               	STA	PT0
+     322/    F7E8 : A5 2B               	LDA	PT1+1
+     323/    F7EA : 69 00               	ADC	#0
+     324/    F7EC : 85 29               	STA	PT0+1
+     325/    F7EE : A5 28               	LDA	PT0
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 8 - 2021/07/14 19時45分35秒
+
+
+     326/    F7F0 : C5 12               	CMP	DEADDR
+     327/    F7F2 : D0 0A               	BNE	DPBE
+     328/    F7F4 : A5 29               	LDA	PT0+1
+     329/    F7F6 : C5 13               	CMP	DEADDR+1
+     330/    F7F8 : D0 04               	BNE	DPBE
+     331/    F7FA :                     	;; Found end address
+     332/    F7FA : A9 02               	LDA	#2
+     333/    F7FC : 85 14               	STA	DSTATE
+     334/    F7FE :                     DPBE:
+     335/    F7FE : 60                  	RTS
+     336/    F7FF :                     
+     337/    F7FF :                     ;;;
+     338/    F7FF :                     ;;;  Go address
+     339/    F7FF :                     ;;;
+     340/    F7FF :                     GO:
+     341/    F7FF : E8                  	INX
+     342/    F800 : 20 86 FB            	JSR	SKIPSP
+     343/    F803 : 20 9C FB            	JSR	RDHEX
+     344/    F806 : B5 00               	LDA	INBUF,X
+     345/    F808 : F0 03               	BEQ	G00
+     346/    F80A : 4C BC F6            	JMP	ERR
+     347/    F80D :                     G00:
+     348/    F80D : A5 2C               	LDA	CNT
+     349/    F80F : F0 08               	BEQ	G0
+     350/    F811 : =>TRUE              	IF USE_REGCMD
+     351/    F811 : A5 2A               	LDA	PT1
+     352/    F813 : 85 20               	STA	REGPC
+     353/    F815 : A5 2B               	LDA	PT1+1
+     354/    F817 : 85 21               	STA	REGPC+1
+     355/    F819 :                     G0:
+     356/    F819 : A6 1F               	LDX	REGSP
+     357/    F81B : 9A                  	TXS			; SP
+     358/    F81C : A5 21               	LDA	REGPC+1
+     359/    F81E : 48                  	PHA			; PC(H)
+     360/    F81F : A5 20               	LDA	REGPC
+     361/    F821 : 48                  	PHA			; PC(L)
+     362/    F822 : A5 22               	LDA	REGPSR
+     363/    F824 : 48                  	PHA			; PSR
+     364/    F825 : A5 1C               	LDA	REGA
+     365/    F827 : A6 1D               	LDX	REGX
+     366/    F829 : A4 1E               	LDY	REGY
+     367/    F82B : 40                  	RTI
+     368/    F82C : =>FALSE             	ELSE			; !USE_REGCMD
+     369/    F82C :                     	LDA	PT1
+     370/    F82C :                     	STA	GADDR
+     371/    F82C :                     	LDA	PT1+1
+     372/    F82C :                     	STA	GADDR+1
+     373/    F82C :                     G0:
+     374/    F82C :                     	JMP	(GADDR)
+     375/    F82C : [350]               	ENDIF			; USE_REGCMD
+     376/    F82C :                     
+     377/    F82C :                     ;;;
+     378/    F82C :                     ;;; Set memory
+     379/    F82C :                     ;;;
+     380/    F82C :                     SETM:
+     381/    F82C : E8                  	INX
+     382/    F82D : 20 86 FB            	JSR	SKIPSP
+     383/    F830 : 20 9C FB            	JSR	RDHEX
+     384/    F833 : 20 86 FB            	JSR	SKIPSP
+     385/    F836 : B5 00               	LDA	INBUF,X
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 9 - 2021/07/14 19時45分35秒
+
+
+     386/    F838 : F0 03               	BEQ	SM0
+     387/    F83A : 4C BC F6            	JMP	ERR
+     388/    F83D :                     SM0:
+     389/    F83D : A5 2C               	LDA	CNT
+     390/    F83F : F0 08               	BEQ	SM1
+     391/    F841 : A5 2A               	LDA	PT1
+     392/    F843 : 85 17               	STA	SADDR
+     393/    F845 : A5 2B               	LDA	PT1+1
+     394/    F847 : 85 18               	STA	SADDR+1
+     395/    F849 :                     SM1:
+     396/    F849 : A5 18               	LDA	SADDR+1
+     397/    F84B : 20 F0 FA            	JSR	HEXOUT2
+     398/    F84E : A5 17               	LDA	SADDR
+     399/    F850 : 20 F0 FA            	JSR	HEXOUT2
+     400/    F853 : A9 53               	LDA	#low(DSEP1)
+     401/    F855 : 85 28               	STA	PT0
+     402/    F857 : A9 FC               	LDA	#high(DSEP1)
+     403/    F859 : 85 29               	STA	PT0+1
+     404/    F85B : 20 E2 FA            	JSR	STROUT
+     405/    F85E : A0 00               	LDY	#0
+     406/    F860 : B1 17               	LDA	(SADDR),Y
+     407/    F862 : 20 F0 FA            	JSR	HEXOUT2
+     408/    F865 : A9 20               	LDA	#' '
+     409/    F867 : 20 36 FD            	JSR	CONOUT
+     410/    F86A : 20 3D FB            	JSR	GETLIN
+     411/    F86D : A2 00               	LDX	#0
+     412/    F86F : 20 86 FB            	JSR	SKIPSP
+     413/    F872 : B5 00               	LDA	INBUF,X
+     414/    F874 : D0 10               	BNE	SM2
+     415/    F876 :                     SM10:	
+     416/    F876 :                     	;; Empty (Increment address)
+     417/    F876 : A5 17               	LDA	SADDR
+     418/    F878 : 18                  	CLC
+     419/    F879 : 69 01               	ADC	#1
+     420/    F87B : 85 17               	STA	SADDR
+     421/    F87D : A5 18               	LDA	SADDR+1
+     422/    F87F : 69 00               	ADC	#0
+     423/    F881 : 85 18               	STA	SADDR+1
+     424/    F883 : 4C 49 F8            	JMP	SM1
+     425/    F886 :                     SM2:
+     426/    F886 : C9 2D               	CMP	#'-'
+     427/    F888 : D0 10               	BNE	SM3
+     428/    F88A :                     	;; '-' (Decrement address)
+     429/    F88A : A5 17               	LDA	SADDR
+     430/    F88C : 38                  	SEC
+     431/    F88D : E9 01               	SBC	#1
+     432/    F88F : 85 17               	STA	SADDR
+     433/    F891 : A5 18               	LDA	SADDR+1
+     434/    F893 : E9 00               	SBC	#0
+     435/    F895 : 85 18               	STA	SADDR+1
+     436/    F897 : 4C 49 F8            	JMP	SM1
+     437/    F89A :                     SM3:
+     438/    F89A : C9 2E               	CMP	#'.'
+     439/    F89C : D0 03               	BNE	SM4
+     440/    F89E :                     	;; '.' (Quit)
+     441/    F89E : 4C 7F F6            	JMP	WSTART
+     442/    F8A1 :                     SM4:
+     443/    F8A1 : 20 9C FB            	JSR	RDHEX
+     444/    F8A4 : A5 2C               	LDA	CNT
+     445/    F8A6 : D0 03               	BNE	SM40
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 10 - 2021/07/14 19時45分35秒
+
+
+     446/    F8A8 :                     SMER:
+     447/    F8A8 : 4C BC F6            	JMP	ERR
+     448/    F8AB :                     SM40:
+     449/    F8AB : A5 2A               	LDA	PT1
+     450/    F8AD : A0 00               	LDY	#0
+     451/    F8AF : 91 17               	STA	(SADDR),Y
+     452/    F8B1 : 4C 76 F8            	JMP	SM10
+     453/    F8B4 :                     
+     454/    F8B4 :                     ;;;
+     455/    F8B4 :                     ;;; LOAD HEX file
+     456/    F8B4 :                     ;;;
+     457/    F8B4 :                     LOADH:
+     458/    F8B4 : E8                  	INX
+     459/    F8B5 : 20 86 FB            	JSR	SKIPSP
+     460/    F8B8 : 20 9C FB            	JSR	RDHEX
+     461/    F8BB : 20 86 FB            	JSR	SKIPSP
+     462/    F8BE : B5 00               	LDA	INBUF,X
+     463/    F8C0 : D0 E6               	BNE	SMER
+     464/    F8C2 :                     LH0:
+     465/    F8C2 : 20 1E FD            	JSR	CONIN
+     466/    F8C5 : 20 91 FB            	JSR	UPPER
+     467/    F8C8 : C9 53               	CMP	#'S'
+     468/    F8CA : F0 7E               	BEQ	LHS0
+     469/    F8CC :                     LH1a:
+     470/    F8CC : C9 3A               	CMP	#':'
+     471/    F8CE : F0 0E               	BEQ	LHI0
+     472/    F8D0 :                     LH2:
+     473/    F8D0 :                     	;; Skip to EOL
+     474/    F8D0 : C9 0D               	CMP	#CR
+     475/    F8D2 : F0 EE               	BEQ	LH0
+     476/    F8D4 : C9 0A               	CMP	#LF
+     477/    F8D6 : F0 EA               	BEQ	LH0
+     478/    F8D8 :                     LH3:
+     479/    F8D8 : 20 1E FD            	JSR	CONIN
+     480/    F8DB : 4C D0 F8            	JMP	LH2
+     481/    F8DE :                     
+     482/    F8DE :                     LHI0:
+     483/    F8DE : 20 08 FB            	JSR	HEXIN
+     484/    F8E1 : 85 26               	STA	CKSUM
+     485/    F8E3 : 85 2C               	STA	CNT		; Length
+     486/    F8E5 :                     
+     487/    F8E5 : 20 08 FB            	JSR	HEXIN
+     488/    F8E8 : 85 25               	STA	DMPPT+1		; Address H
+     489/    F8EA : 18                  	CLC
+     490/    F8EB : 65 26               	ADC	CKSUM
+     491/    F8ED : 85 26               	STA	CKSUM
+     492/    F8EF :                     
+     493/    F8EF : 20 08 FB            	JSR	HEXIN
+     494/    F8F2 : 85 24               	STA	DMPPT		; Address L
+     495/    F8F4 : 18                  	CLC
+     496/    F8F5 : 65 26               	ADC	CKSUM
+     497/    F8F7 : 85 26               	STA	CKSUM
+     498/    F8F9 :                     
+     499/    F8F9 :                     	;; Add offset
+     500/    F8F9 : A5 24               	LDA	DMPPT
+     501/    F8FB : 18                  	CLC
+     502/    F8FC : 65 2A               	ADC	PT1
+     503/    F8FE : 85 24               	STA	DMPPT
+     504/    F900 : A5 25               	LDA	DMPPT+1
+     505/    F902 : 65 2B               	ADC	PT1+1
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 11 - 2021/07/14 19時45分35秒
+
+
+     506/    F904 : 85 25               	STA	DMPPT+1
+     507/    F906 : A0 00               	LDY	#0
+     508/    F908 :                     	
+     509/    F908 : 20 08 FB            	JSR	HEXIN
+     510/    F90B : 85 1A               	STA	RECTYP		; Record Type
+     511/    F90D : 18                  	CLC
+     512/    F90E : 65 26               	ADC	CKSUM
+     513/    F910 : 85 26               	STA	CKSUM
+     514/    F912 :                     
+     515/    F912 : A5 2C               	LDA	CNT
+     516/    F914 : F0 17               	BEQ	LHI3
+     517/    F916 :                     LHI1:
+     518/    F916 : 20 08 FB            	JSR	HEXIN
+     519/    F919 : 48                  	PHA
+     520/    F91A : 18                  	CLC
+     521/    F91B : 65 26               	ADC	CKSUM
+     522/    F91D : 85 26               	STA	CKSUM
+     523/    F91F :                     
+     524/    F91F : A5 1A               	LDA	RECTYP
+     525/    F921 : D0 05               	BNE	LHI2
+     526/    F923 :                     
+     527/    F923 : 68                  	PLA
+     528/    F924 : 91 24               	STA	(DMPPT),Y
+     529/    F926 : C8                  	INY
+     530/    F927 : 48                  	PHA			; Dummy, better than JMP to skip next PLA
+     531/    F928 :                     LHI2:
+     532/    F928 : 68                  	PLA
+     533/    F929 : C6 2C               	DEC	CNT
+     534/    F92B : D0 E9               	BNE	LHI1
+     535/    F92D :                     LHI3:
+     536/    F92D : 20 08 FB            	JSR	HEXIN
+     537/    F930 : 18                  	CLC
+     538/    F931 : 65 26               	ADC	CKSUM
+     539/    F933 : D0 07               	BNE	LHIE		; Checksum error
+     540/    F935 : A5 1A               	LDA	RECTYP
+     541/    F937 : F0 9F               	BEQ	LH3
+     542/    F939 : 4C 7F F6            	JMP	WSTART
+     543/    F93C :                     LHIE:
+     544/    F93C : A9 2E               	LDA	#low(IHEMSG)
+     545/    F93E : 85 28               	STA	PT0
+     546/    F940 : A9 FC               	LDA	#high(IHEMSG)
+     547/    F942 : 85 29               	STA	PT0+1
+     548/    F944 : 20 E2 FA            	JSR	STROUT
+     549/    F947 : 4C 7F F6            	JMP	WSTART
+     550/    F94A :                     
+     551/    F94A :                     LHS0:	
+     552/    F94A : 20 1E FD            	JSR	CONIN
+     553/    F94D : 85 1A               	STA	RECTYP		; Record Type
+     554/    F94F :                     
+     555/    F94F : 20 08 FB            	JSR	HEXIN
+     556/    F952 : 85 2C               	STA	CNT		; (CNT) = Length+3
+     557/    F954 : 85 26               	STA	CKSUM
+     558/    F956 :                     
+     559/    F956 : 20 08 FB            	JSR	HEXIN
+     560/    F959 : 85 25               	STA	DMPPT+1		; Address H
+     561/    F95B : 18                  	CLC
+     562/    F95C : 65 26               	ADC	CKSUM
+     563/    F95E : 85 26               	STA	CKSUM
+     564/    F960 :                     	
+     565/    F960 : 20 08 FB            	JSR	HEXIN
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 12 - 2021/07/14 19時45分35秒
+
+
+     566/    F963 : 85 24               	STA	DMPPT		; Address L
+     567/    F965 : 18                  	CLC
+     568/    F966 : 65 26               	ADC	CKSUM
+     569/    F968 : 85 26               	STA	CKSUM
+     570/    F96A :                     
+     571/    F96A :                     	;; Add offset
+     572/    F96A : A5 24               	LDA	DMPPT
+     573/    F96C : 18                  	CLC
+     574/    F96D : 65 2A               	ADC	PT1
+     575/    F96F : 85 24               	STA	DMPPT
+     576/    F971 : A5 25               	LDA	DMPPT+1
+     577/    F973 : 65 2B               	ADC	PT1+1
+     578/    F975 : 85 25               	STA	DMPPT+1
+     579/    F977 : A0 00               	LDY	#0
+     580/    F979 :                     
+     581/    F979 : C6 2C               	DEC	CNT
+     582/    F97B : C6 2C               	DEC	CNT
+     583/    F97D : C6 2C               	DEC	CNT
+     584/    F97F : F0 19               	BEQ	LHS3
+     585/    F981 :                     LHS1:
+     586/    F981 : 20 08 FB            	JSR	HEXIN
+     587/    F984 : 48                  	PHA
+     588/    F985 : 18                  	CLC
+     589/    F986 : 65 26               	ADC	CKSUM
+     590/    F988 : 85 26               	STA	CKSUM		; Checksum
+     591/    F98A :                     
+     592/    F98A : A5 1A               	LDA	RECTYP
+     593/    F98C : C9 31               	CMP	#'1'
+     594/    F98E : D0 05               	BNE	LHS2
+     595/    F990 :                     
+     596/    F990 : 68                  	PLA
+     597/    F991 : 91 24               	STA	(DMPPT),Y
+     598/    F993 : C8                  	INY
+     599/    F994 : 48                  	PHA			; Dummy, better than JMP to skip next PLA
+     600/    F995 :                     LHS2:
+     601/    F995 : 68                  	PLA
+     602/    F996 : C6 2C               	DEC	CNT
+     603/    F998 : D0 E7               	BNE	LHS1
+     604/    F99A :                     LHS3:
+     605/    F99A : 20 08 FB            	JSR	HEXIN
+     606/    F99D : 18                  	CLC
+     607/    F99E : 65 26               	ADC	CKSUM
+     608/    F9A0 : C9 FF               	CMP	#$FF
+     609/    F9A2 : D0 09               	BNE	LHSE		; Checksum error
+     610/    F9A4 :                     
+     611/    F9A4 : A5 1A               	LDA	RECTYP
+     612/    F9A6 : C9 39               	CMP	#'9'
+     613/    F9A8 : F0 0E               	BEQ	LHSR
+     614/    F9AA : 4C D8 F8            	JMP	LH3
+     615/    F9AD :                     LHSE:
+     616/    F9AD : A9 3B               	LDA	#low(SHEMSG)
+     617/    F9AF : 85 28               	STA	PT0
+     618/    F9B1 : A9 FC               	LDA	#high(SHEMSG)
+     619/    F9B3 : 85 29               	STA	PT0+1
+     620/    F9B5 : 20 E2 FA            	JSR	STROUT
+     621/    F9B8 :                     LHSR:	
+     622/    F9B8 : 4C 7F F6            	JMP	WSTART
+     623/    F9BB :                     
+     624/    F9BB :                     ;;;
+     625/    F9BB :                     ;;; Register
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 13 - 2021/07/14 19時45分35秒
+
+
+     626/    F9BB :                     ;;;
+     627/    F9BB : =>TRUE              	IF USE_REGCMD
+     628/    F9BB :                     REG:
+     629/    F9BB : E8                  	INX
+     630/    F9BC : 20 86 FB            	JSR	SKIPSP
+     631/    F9BF : 20 91 FB            	JSR	UPPER
+     632/    F9C2 : C9 00               	CMP	#0
+     633/    F9C4 : D0 06               	BNE	RG0
+     634/    F9C6 : 20 7A FA            	JSR	RDUMP
+     635/    F9C9 : 4C 7F F6            	JMP	WSTART
+     636/    F9CC :                     RG0:
+     637/    F9CC : A0 BD               	LDY	#low(RNTAB)
+     638/    F9CE : 84 2A               	STY	PT1
+     639/    F9D0 : A0 FC               	LDY	#high(RNTAB)
+     640/    F9D2 : 84 2B               	STY	PT1+1
+     641/    F9D4 : A0 00               	LDY	#0
+     642/    F9D6 :                     RG1:
+     643/    F9D6 : D1 2A               	CMP	(PT1),Y
+     644/    F9D8 : F0 13               	BEQ	RG2
+     645/    F9DA : C8                  	INY
+     646/    F9DB : 48                  	PHA
+     647/    F9DC : B1 2A               	LDA	(PT1),Y
+     648/    F9DE : F0 09               	BEQ	RGE
+     649/    F9E0 : 68                  	PLA
+     650/    F9E1 : C8                  	INY
+     651/    F9E2 : C8                  	INY
+     652/    F9E3 : C8                  	INY
+     653/    F9E4 : C8                  	INY
+     654/    F9E5 : C8                  	INY
+     655/    F9E6 : 4C D6 F9            	JMP	RG1
+     656/    F9E9 :                     RGE:
+     657/    F9E9 : 68                  	PLA
+     658/    F9EA : 4C BC F6            	JMP	ERR
+     659/    F9ED :                     RG2:
+     660/    F9ED : C8                  	INY
+     661/    F9EE : B1 2A               	LDA	(PT1),Y
+     662/    F9F0 : C9 80               	CMP	#$80
+     663/    F9F2 : D0 19               	BNE	RG3
+     664/    F9F4 :                     	;; Next table
+     665/    F9F4 : C8                  	INY
+     666/    F9F5 : B1 2A               	LDA	(PT1),Y
+     667/    F9F7 : 85 2C               	STA	CNT		; Temporary
+     668/    F9F9 : C8                  	INY
+     669/    F9FA : B1 2A               	LDA	(PT1),Y
+     670/    F9FC : 85 2B               	STA	PT1+1
+     671/    F9FE : A5 2C               	LDA	CNT
+     672/    FA00 : 85 2A               	STA	PT1
+     673/    FA02 : A0 00               	LDY	#0
+     674/    FA04 : E8                  	INX
+     675/    FA05 : B5 00               	LDA	INBUF,X
+     676/    FA07 : 20 91 FB            	JSR	UPPER
+     677/    FA0A : 4C D6 F9            	JMP	RG1
+     678/    FA0D :                     RG3:
+     679/    FA0D : C9 00               	CMP	#0
+     680/    FA0F : F0 66               	BEQ	RGE0
+     681/    FA11 :                     
+     682/    FA11 : C8                  	INY			; +2
+     683/    FA12 : B1 2A               	LDA	(PT1),Y
+     684/    FA14 : AA                  	TAX
+     685/    FA15 : C8                  	INY
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 14 - 2021/07/14 19時45分35秒
+
+
+     686/    FA16 :                     
+     687/    FA16 : C8                  	INY			; +4
+     688/    FA17 : B1 2A               	LDA	(PT1),Y
+     689/    FA19 : 85 28               	STA	PT0
+     690/    FA1B : C8                  	INY
+     691/    FA1C : B1 2A               	LDA	(PT1),Y
+     692/    FA1E : 85 29               	STA	PT0+1
+     693/    FA20 : 84 2C               	STY	CNT		; Save Y (STROUT destroys Y)
+     694/    FA22 : 20 E2 FA            	JSR	STROUT
+     695/    FA25 : A9 3D               	LDA	#'='
+     696/    FA27 : 20 36 FD            	JSR	CONOUT
+     697/    FA2A : A4 2C               	LDY	CNT		; Restore Y
+     698/    FA2C : 88                  	DEY
+     699/    FA2D : 88                  	DEY
+     700/    FA2E : 88                  	DEY
+     701/    FA2F : 88                  	DEY
+     702/    FA30 : B1 2A               	LDA	(PT1),Y
+     703/    FA32 : 85 23               	STA	REGSIZ
+     704/    FA34 : C9 01               	CMP	#1
+     705/    FA36 : D0 08               	BNE	RG4
+     706/    FA38 :                     	;; 8 bit register
+     707/    FA38 : B5 00               	LDA	0,X
+     708/    FA3A : 20 F0 FA            	JSR	HEXOUT2
+     709/    FA3D : 4C 4A FA            	JMP	RG5
+     710/    FA40 :                     RG4:
+     711/    FA40 :                     	;; 16 bit register
+     712/    FA40 : B5 01               	LDA	1,X
+     713/    FA42 : 20 F0 FA            	JSR	HEXOUT2
+     714/    FA45 : B5 00               	LDA	0,X
+     715/    FA47 : 20 F0 FA            	JSR	HEXOUT2
+     716/    FA4A :                     RG5:
+     717/    FA4A : A9 20               	LDA	#' '
+     718/    FA4C : 20 36 FD            	JSR	CONOUT
+     719/    FA4F : 86 26               	STX	CKSUM		; Save X (GETLIN destroys X)
+     720/    FA51 : 20 3D FB            	JSR	GETLIN
+     721/    FA54 : A2 00               	LDX	#0
+     722/    FA56 : 20 9C FB            	JSR	RDHEX
+     723/    FA59 : A5 2C               	LDA	CNT
+     724/    FA5B : F0 17               	BEQ	RGR
+     725/    FA5D : A6 26               	LDX	CKSUM		; Restore X
+     726/    FA5F : A5 23               	LDA	REGSIZ
+     727/    FA61 : C9 01               	CMP	#1
+     728/    FA63 : D0 07               	BNE	RG6
+     729/    FA65 :                     	;; 8 bit register
+     730/    FA65 : A5 2A               	LDA	PT1
+     731/    FA67 : 95 00               	STA	,X
+     732/    FA69 : 4C 74 FA            	JMP	RG7
+     733/    FA6C :                     RG6:
+     734/    FA6C :                     	;; 16 bit address
+     735/    FA6C : A5 2A               	LDA	PT1
+     736/    FA6E : 95 00               	STA	,X		; (L)
+     737/    FA70 : A5 2B               	LDA	PT1+1
+     738/    FA72 : 95 01               	STA	1,X		; (H)
+     739/    FA74 :                     RG7:	
+     740/    FA74 :                     RGR:	
+     741/    FA74 : 4C 7F F6            	JMP	WSTART
+     742/    FA77 :                     	
+     743/    FA77 :                     RGE0:	
+     744/    FA77 : 4C BC F6            	JMP	ERR
+     745/    FA7A :                     	
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 15 - 2021/07/14 19時45分35秒
+
+
+     746/    FA7A :                     RDUMP:
+     747/    FA7A : A9 A0               	LDA	#low(RDSA)	; A
+     748/    FA7C : 85 28               	STA	PT0
+     749/    FA7E : A9 FC               	LDA	#high(RDSA)
+     750/    FA80 : 85 29               	STA	PT0+1
+     751/    FA82 : 20 E2 FA            	JSR	STROUT
+     752/    FA85 : A5 1C               	LDA	REGA
+     753/    FA87 : 20 F0 FA            	JSR	HEXOUT2
+     754/    FA8A :                     
+     755/    FA8A : A9 A3               	LDA	#low(RDSX)	; X
+     756/    FA8C : 85 28               	STA	PT0
+     757/    FA8E : A9 FC               	LDA	#high(RDSX)
+     758/    FA90 : 85 29               	STA	PT0+1
+     759/    FA92 : 20 E2 FA            	JSR	STROUT
+     760/    FA95 : A5 1D               	LDA	REGX
+     761/    FA97 : 20 F0 FA            	JSR	HEXOUT2
+     762/    FA9A :                     
+     763/    FA9A : A9 A7               	LDA	#low(RDSY)	; Y
+     764/    FA9C : 85 28               	STA	PT0
+     765/    FA9E : A9 FC               	LDA	#high(RDSY)
+     766/    FAA0 : 85 29               	STA	PT0+1
+     767/    FAA2 : 20 E2 FA            	JSR	STROUT
+     768/    FAA5 : A5 1E               	LDA	REGY
+     769/    FAA7 : 20 F0 FA            	JSR	HEXOUT2
+     770/    FAAA :                     
+     771/    FAAA : A9 AB               	LDA	#low(RDSSP)	; SP
+     772/    FAAC : 85 28               	STA	PT0
+     773/    FAAE : A9 FC               	LDA	#high(RDSSP)
+     774/    FAB0 : 85 29               	STA	PT0+1
+     775/    FAB2 : 20 E2 FA            	JSR	STROUT
+     776/    FAB5 : A5 1F               	LDA	REGSP
+     777/    FAB7 : 20 F0 FA            	JSR	HEXOUT2
+     778/    FABA :                     
+     779/    FABA : A9 B2               	LDA	#low(RDSPC)	; PC
+     780/    FABC : 85 28               	STA	PT0
+     781/    FABE : A9 FC               	LDA	#high(RDSPC)
+     782/    FAC0 : 85 29               	STA	PT0+1
+     783/    FAC2 : 20 E2 FA            	JSR	STROUT
+     784/    FAC5 : A5 21               	LDA	REGPC+1		; PC(H)
+     785/    FAC7 : 20 F0 FA            	JSR	HEXOUT2
+     786/    FACA : A5 20               	LDA	REGPC		; PC(L)
+     787/    FACC : 20 F0 FA            	JSR	HEXOUT2
+     788/    FACF :                     
+     789/    FACF : A9 B7               	LDA	#low(RDSPSR)	; PSR
+     790/    FAD1 : 85 28               	STA	PT0
+     791/    FAD3 : A9 FC               	LDA	#high(RDSPSR)
+     792/    FAD5 : 85 29               	STA	PT0+1
+     793/    FAD7 : 20 E2 FA            	JSR	STROUT
+     794/    FADA : A5 22               	LDA	REGPSR
+     795/    FADC : 20 F0 FA            	JSR	HEXOUT2
+     796/    FADF :                     
+     797/    FADF : 4C 33 FB            	JMP	CRLF
+     798/    FAE2 : [627]               	ENDIF
+     799/    FAE2 :                     
+     800/    FAE2 :                     ;;;
+     801/    FAE2 :                     ;;; Other support routines
+     802/    FAE2 :                     ;;;
+     803/    FAE2 :                     
+     804/    FAE2 :                     STROUT:
+     805/    FAE2 : A0 00               	LDY	#0
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 16 - 2021/07/14 19時45分35秒
+
+
+     806/    FAE4 :                     STRO0:
+     807/    FAE4 : B1 28               	LDA	(PT0),Y
+     808/    FAE6 : F0 07               	BEQ	STROE
+     809/    FAE8 : 20 36 FD            	JSR	CONOUT
+     810/    FAEB : C8                  	INY
+     811/    FAEC : 4C E4 FA            	JMP	STRO0
+     812/    FAEF :                     STROE:
+     813/    FAEF : 60                  	RTS
+     814/    FAF0 :                     
+     815/    FAF0 :                     HEXOUT2:
+     816/    FAF0 : 48                  	PHA
+     817/    FAF1 : 4A                  	LSR	A
+     818/    FAF2 : 4A                  	LSR	A
+     819/    FAF3 : 4A                  	LSR	A
+     820/    FAF4 : 4A                  	LSR	A
+     821/    FAF5 : 20 F9 FA            	JSR	HEXOUT1
+     822/    FAF8 : 68                  	PLA
+     823/    FAF9 :                     HEXOUT1:
+     824/    FAF9 : 29 0F               	AND	#$0F
+     825/    FAFB : 18                  	CLC
+     826/    FAFC : 69 30               	ADC	#'0'
+     827/    FAFE : C9 3A               	CMP	#'9'+1
+     828/    FB00 : 90 03               	BCC	HEXOUTE
+     829/    FB02 : 18                  	CLC
+     830/    FB03 : 69 07               	ADC	#'A'-'9'-1
+     831/    FB05 :                     HEXOUTE:
+     832/    FB05 : 4C 36 FD            	JMP	CONOUT
+     833/    FB08 :                     
+     834/    FB08 :                     HEXIN:
+     835/    FB08 : A9 00               	LDA	#0
+     836/    FB0A : 20 11 FB            	JSR	HI0
+     837/    FB0D : 0A                  	ASL
+     838/    FB0E : 0A                  	ASL
+     839/    FB0F : 0A                  	ASL
+     840/    FB10 : 0A                  	ASL
+     841/    FB11 :                     HI0:
+     842/    FB11 : 85 27               	STA	HITMP
+     843/    FB13 : 20 1E FD            	JSR	CONIN
+     844/    FB16 : 20 91 FB            	JSR	UPPER
+     845/    FB19 : C9 30               	CMP	#'0'
+     846/    FB1B : 90 15               	BCC	HIR
+     847/    FB1D : C9 3A               	CMP	#'9'+1
+     848/    FB1F : 90 0B               	BCC	HI1
+     849/    FB21 : C9 41               	CMP	#'A'
+     850/    FB23 : 90 0D               	BCC	HIR
+     851/    FB25 : C9 47               	CMP	#'F'+1
+     852/    FB27 : B0 09               	BCS	HIR
+     853/    FB29 : 38                  	SEC
+     854/    FB2A : E9 07               	SBC	#'A'-'9'-1
+     855/    FB2C :                     HI1:
+     856/    FB2C : 38                  	SEC
+     857/    FB2D : E9 30               	SBC	#'0'
+     858/    FB2F : 18                  	CLC
+     859/    FB30 : 65 27               	ADC	HITMP
+     860/    FB32 :                     HIR:
+     861/    FB32 : 60                  	RTS
+     862/    FB33 :                     	
+     863/    FB33 :                     CRLF:
+     864/    FB33 : A9 0D               	LDA	#CR
+     865/    FB35 : 20 36 FD            	JSR	CONOUT
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 17 - 2021/07/14 19時45分35秒
+
+
+     866/    FB38 : A9 0A               	LDA	#LF
+     867/    FB3A : 4C 36 FD            	JMP	CONOUT
+     868/    FB3D :                     
+     869/    FB3D :                     GETLIN:
+     870/    FB3D : A2 00               	LDX	#0
+     871/    FB3F :                     GL0:
+     872/    FB3F : 20 1E FD            	JSR	CONIN
+     873/    FB42 : C9 0D               	CMP	#CR
+     874/    FB44 : F0 38               	BEQ	GLE
+     875/    FB46 : C9 0A               	CMP	#LF
+     876/    FB48 : F0 34               	BEQ	GLE
+     877/    FB4A : C9 08               	CMP	#BS
+     878/    FB4C : F0 19               	BEQ	GLB
+     879/    FB4E : C9 7F               	CMP	#DEL
+     880/    FB50 : F0 15               	BEQ	GLB
+     881/    FB52 : C9 20               	CMP	#' '
+     882/    FB54 : 90 E9               	BCC	GL0
+     883/    FB56 : C9 80               	CMP	#$80
+     884/    FB58 : B0 E5               	BCS	GL0
+     885/    FB5A : E0 0F               	CPX	#BUFLEN-1
+     886/    FB5C : B0 E1               	BCS	GL0		; Too long
+     887/    FB5E : 95 00               	STA	INBUF,X
+     888/    FB60 : E8                  	INX
+     889/    FB61 : 20 36 FD            	JSR	CONOUT
+     890/    FB64 : 4C 3F FB            	JMP	GL0
+     891/    FB67 :                     GLB:
+     892/    FB67 : E0 00               	CPX	#0
+     893/    FB69 : F0 D4               	BEQ	GL0
+     894/    FB6B : CA                  	DEX
+     895/    FB6C : A9 08               	LDA	#BS
+     896/    FB6E : 20 36 FD            	JSR	CONOUT
+     897/    FB71 : A9 20               	LDA	#' '
+     898/    FB73 : 20 36 FD            	JSR	CONOUT
+     899/    FB76 : A9 08               	LDA	#BS
+     900/    FB78 : 20 36 FD            	JSR	CONOUT
+     901/    FB7B : 4C 3F FB            	JMP	GL0
+     902/    FB7E :                     GLE:
+     903/    FB7E : 20 33 FB            	JSR	CRLF
+     904/    FB81 : A9 00               	LDA	#0
+     905/    FB83 : 95 00               	STA	INBUF,X
+     906/    FB85 : 60                  	RTS
+     907/    FB86 :                     
+     908/    FB86 :                     SKIPSP:
+     909/    FB86 : B5 00               	LDA	INBUF,X
+     910/    FB88 : C9 20               	CMP	#' '
+     911/    FB8A : D0 04               	BNE	SSE
+     912/    FB8C : E8                  	INX
+     913/    FB8D : 4C 86 FB            	JMP	SKIPSP
+     914/    FB90 :                     SSE:
+     915/    FB90 : 60                  	RTS
+     916/    FB91 :                     
+     917/    FB91 :                     UPPER:
+     918/    FB91 : C9 61               	CMP	#'a'
+     919/    FB93 : 90 06               	BCC	UPE
+     920/    FB95 : C9 7B               	CMP	#'z'+1
+     921/    FB97 : B0 02               	BCS	UPE
+     922/    FB99 : 69 E0               	ADC	#'A'-'a'
+     923/    FB9B :                     UPE:
+     924/    FB9B : 60                  	RTS
+     925/    FB9C :                     
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 18 - 2021/07/14 19時45分35秒
+
+
+     926/    FB9C :                     RDHEX:
+     927/    FB9C : A9 00               	LDA	#0
+     928/    FB9E : 85 2A               	STA	PT1
+     929/    FBA0 : 85 2B               	STA	PT1+1
+     930/    FBA2 : 85 2C               	STA	CNT
+     931/    FBA4 :                     RH0:
+     932/    FBA4 : B5 00               	LDA	INBUF,X
+     933/    FBA6 : 20 91 FB            	JSR	UPPER
+     934/    FBA9 : C9 30               	CMP	#'0'
+     935/    FBAB : 90 2D               	BCC	RHE
+     936/    FBAD : C9 3A               	CMP	#'9'+1
+     937/    FBAF : 90 0B               	BCC	RH1
+     938/    FBB1 : C9 41               	CMP	#'A'
+     939/    FBB3 : 90 25               	BCC	RHE
+     940/    FBB5 : C9 47               	CMP	#'F'+1
+     941/    FBB7 : B0 21               	BCS	RHE
+     942/    FBB9 : 38                  	SEC
+     943/    FBBA : E9 07               	SBC	#'A'-'9'-1
+     944/    FBBC :                     RH1:
+     945/    FBBC : 38                  	SEC
+     946/    FBBD : E9 30               	SBC	#'0'
+     947/    FBBF : 06 2A               	ASL	PT1
+     948/    FBC1 : 26 2B               	ROL	PT1+1
+     949/    FBC3 : 06 2A               	ASL	PT1
+     950/    FBC5 : 26 2B               	ROL	PT1+1
+     951/    FBC7 : 06 2A               	ASL	PT1
+     952/    FBC9 : 26 2B               	ROL	PT1+1
+     953/    FBCB : 06 2A               	ASL	PT1
+     954/    FBCD : 26 2B               	ROL	PT1+1
+     955/    FBCF : 18                  	CLC
+     956/    FBD0 : 65 2A               	ADC	PT1
+     957/    FBD2 : 85 2A               	STA	PT1
+     958/    FBD4 : E6 2C               	INC	CNT
+     959/    FBD6 : E8                  	INX
+     960/    FBD7 : 4C A4 FB            	JMP	RH0
+     961/    FBDA :                     RHE:
+     962/    FBDA : 60                  	RTS
+     963/    FBDB :                     
+     964/    FBDB :                     ;;;
+     965/    FBDB :                     ;;; Interrupt handler
+     966/    FBDB :                     ;;;
+     967/    FBDB :                     	;; Interrupt / Break
+     968/    FBDB :                     IRQBRK:
+     969/    FBDB : =>TRUE              	IF USE_REGCMD
+     970/    FBDB : 48                  	PHA
+     971/    FBDC : 08                  	PHP
+     972/    FBDD : 68                  	PLA			; A <= PSR
+     973/    FBDE : 29 10               	AND	#$10		; Check B flag
+     974/    FBE0 : F0 2C               	BEQ	IBIR
+     975/    FBE2 : D8                  	CLD
+     976/    FBE3 :                     	
+     977/    FBE3 : 68                  	PLA			; A
+     978/    FBE4 : 85 1C               	STA	REGA
+     979/    FBE6 : 8A                  	TXA			; X
+     980/    FBE7 : 85 1D               	STA	REGX
+     981/    FBE9 : 98                  	TYA			; Y
+     982/    FBEA : 85 1E               	STA	REGY
+     983/    FBEC : 68                  	PLA			; PSR (Pushed by BRK)
+     984/    FBED : 85 22               	STA	REGPSR
+     985/    FBEF : 68                  	PLA			; PC(L) (Pushed by BRK)
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 19 - 2021/07/14 19時45分35秒
+
+
+     986/    FBF0 : 38                  	SEC
+     987/    FBF1 : E9 02               	SBC	#2		; Adjust PC to point BRK instruction
+     988/    FBF3 : 85 20               	STA	REGPC
+     989/    FBF5 : 68                  	PLA			; PC(H) (Pushed by BRK)
+     990/    FBF6 : E9 00               	SBC	#0
+     991/    FBF8 : 85 21               	STA	REGPC+1
+     992/    FBFA : BA                  	TSX			; SP
+     993/    FBFB : 86 1F               	STX	REGSP
+     994/    FBFD :                     
+     995/    FBFD : A9 9A               	LDA	#low(BRKMSG)
+     996/    FBFF : 85 28               	STA	PT0
+     997/    FC01 : A9 FC               	LDA	#high(BRKMSG)
+     998/    FC03 : 85 29               	STA	PT0+1
+     999/    FC05 : 20 E2 FA            	JSR	STROUT
+    1000/    FC08 : 20 7A FA            	JSR	RDUMP
+    1001/    FC0B : 4C 7F F6            	JMP	WSTART
+    1002/    FC0E :                     
+    1003/    FC0E :                     IBIR:
+    1004/    FC0E : 68                  	PLA
+    1005/    FC0F : 40                  	RTI
+    1006/    FC10 : =>FALSE             	ELSE			; USE_REGCMD
+    1007/    FC10 :                     	;; Dummy
+    1008/    FC10 :                     	RTI
+    1009/    FC10 : [969]               	ENDIF			; USE_REGCMD
+    1010/    FC10 :                     	
+    1011/    FC10 :                     OPNMSG:
+    1012/    FC10 : 0D 0A 55 6E 69 76   	FCB	CR,LF,"Universal Monitor 6502",CR,LF,$00
+             FC16 : 65 72 73 61 6C 20 
+             FC1C : 4D 6F 6E 69 74 6F 
+             FC22 : 72 20 36 35 30 32 
+             FC28 : 0D 0A 00          
+    1013/    FC2B :                     PROMPT:
+    1014/    FC2B : 5D 20 00            	FCB	"] ",$00
+    1015/    FC2E :                     IHEMSG:
+    1016/    FC2E : 45 72 72 6F 72 20   	FCB	"Error ihex",CR,LF,$00
+             FC34 : 69 68 65 78 0D 0A 
+             FC3A : 00                
+    1017/    FC3B :                     
+    1018/    FC3B :                     SHEMSG:
+    1019/    FC3B : 45 72 72 6F 72 20   	FCB	"Error srec",CR,LF,$00
+             FC41 : 73 72 65 63 0D 0A 
+             FC47 : 00                
+    1020/    FC48 :                     
+    1021/    FC48 :                     ERRMSG:
+    1022/    FC48 : 45 72 72 6F 72 0D   	FCB	"Error",CR,LF,$00
+             FC4E : 0A 00             
+    1023/    FC50 :                     
+    1024/    FC50 :                     DSEP0:
+    1025/    FC50 : 20 3A 00            	FCB	" :",$00
+    1026/    FC53 :                     DSEP1:
+    1027/    FC53 : 20 3A 20 00         	FCB	" : ",$00
+    1028/    FC57 :                     IHEXER:
+    1029/    FC57 : 3A 30 30 30 30 30           FCB	":00000001FF",CR,LF,$00
+             FC5D : 30 30 31 46 46 0D 
+             FC63 : 0A 00             
+    1030/    FC65 :                     SRECER:
+    1031/    FC65 : 53 39 30 33 30 30           FCB	"S9030000FC",CR,LF,$00
+             FC6B : 30 30 46 43 0D 0A 
+             FC71 : 00                
+    1032/    FC72 :                     
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 20 - 2021/07/14 19時45分35秒
+
+
+    1033/    FC72 : =>TRUE              	IF USE_IDENT
+    1034/    FC72 : 36 35 30 32 0D 0A   IM65:	FCB	"6502",CR,LF,$00
+             FC78 : 00                
+    1035/    FC79 : 36 35 43 30 32 0D   IM65C:	FCB	"65C02",CR,LF,$00
+             FC7F : 0A 00             
+    1036/    FC81 : 52 36 35 43 30 32   IMR65C:	FCB	"R65C02/W65C02",CR,LF,$00
+             FC87 : 2F 57 36 35 43 30 
+             FC8D : 32 0D 0A 00       
+    1037/    FC91 : 52 50 32 41 30 33   IM2A03:	FCB	"RP2A03",CR,LF,$00
+             FC97 : 0D 0A 00          
+    1038/    FC9A : [1033]              	ENDIF			; USE_IDENT
+    1039/    FC9A :                     	
+    1040/    FC9A : =>TRUE              	IF USE_REGCMD
+    1041/    FC9A :                     
+    1042/    FC9A : 42 52 4B 0D 0A 00   BRKMSG:	FCB	"BRK",CR,LF,$00
+    1043/    FCA0 :                     
+    1044/    FCA0 : 41 3D 00            RDSA:	FCB	"A=",$00
+    1045/    FCA3 : 20 58 3D 00         RDSX:	FCB	" X=",$00
+    1046/    FCA7 : 20 59 3D 00         RDSY:	FCB	" Y=",$00
+    1047/    FCAB : 20 53 50 3D 30 31   RDSSP:	FCB	" SP=01",$00
+             FCB1 : 00                
+    1048/    FCB2 : 20 50 43 3D 00      RDSPC:	FCB	" PC=",$00
+    1049/    FCB7 : 20 50 53 52 3D 00   RDSPSR:	FCB	" PSR=",$00
+    1050/    FCBD :                     
+    1051/    FCBD :                     RNTAB:
+    1052/    FCBD : 41 01               	FCB	'A',1
+    1053/    FCBF : 1C 00 0B FD         	FDB	REGA,RNA
+    1054/    FCC3 : 58 01               	FCB	'X',1
+    1055/    FCC5 : 1D 00 0D FD         	FDB	REGX,RNX
+    1056/    FCC9 : 59 01               	FCB	'Y',1
+    1057/    FCCB : 1E 00 0F FD         	FDB	REGY,RNY
+    1058/    FCCF : 53 80               	FCB	'S',$80
+    1059/    FCD1 : E1 FC 00 00         	FDB	RNTABS,0
+    1060/    FCD5 : 50 80               	FCB	'P',$80
+    1061/    FCD7 : ED FC 00 00         	FDB	RNTABP,0
+    1062/    FCDB :                     	
+    1063/    FCDB : 00 00               	FCB	$00,0		; End mark
+    1064/    FCDD : 00 00 00 00         	FDB	0,0
+    1065/    FCE1 :                     
+    1066/    FCE1 :                     RNTABS:
+    1067/    FCE1 : 50 01               	FCB	'P',1
+    1068/    FCE3 : 1F 00 11 FD         	FDB	REGSP,RNSP
+    1069/    FCE7 :                     	
+    1070/    FCE7 : 00 00               	FCB	$00,0		; End mark
+    1071/    FCE9 : 00 00 00 00         	FDB	0,0
+    1072/    FCED :                     
+    1073/    FCED :                     RNTABP:
+    1074/    FCED : 43 02               	FCB	'C',2
+    1075/    FCEF : 20 00 14 FD         	FDB	REGPC,RNPC
+    1076/    FCF3 : 53 80               	FCB	'S',$80
+    1077/    FCF5 : FF FC 00 00         	FDB	RNTABPS,0
+    1078/    FCF9 :                     
+    1079/    FCF9 : 00 00               	FCB	$00,0		; End mark
+    1080/    FCFB : 00 00 00 00         	FDB	0,0
+    1081/    FCFF :                     
+    1082/    FCFF :                     RNTABPS:
+    1083/    FCFF : 52 01               	FCB	'R',1
+    1084/    FD01 : 22 00 17 FD         	FDB	REGPSR,RNPSR
+    1085/    FD05 :                     
+    1086/    FD05 : 00 00               	FCB	$00,0		; End mark
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 21 - 2021/07/14 19時45分35秒
+
+
+    1087/    FD07 : 00 00 00 00         	FDB	0,0
+    1088/    FD0B :                     	
+    1089/    FD0B : 41 00               RNA:	FCB	"A",$00
+    1090/    FD0D : 58 00               RNX:	FCB	"X",$00
+    1091/    FD0F : 59 00               RNY:	FCB	"Y",$00
+    1092/    FD11 : 53 50 00            RNSP:	FCB	"SP",$00
+    1093/    FD14 : 50 43 00            RNPC:	FCB	"PC",$00
+    1094/    FD17 : 50 53 52 00         RNPSR:	FCB	"PSR",$00
+    1095/    FD1B :                     	
+    1096/    FD1B : [1040]              	ENDIF
+    1097/    FD1B :                     
+    1098/    FD1B : =>FALSE             	IF	USE_DEV_6551
+    1099/    FD1B :                     	INCLUDE	"dev/dev_6551.asm"
+    1100/    FD1B : [1098]              	ENDIF
+    1101/    FD1B :                     
+    1102/    FD1B : =>FALSE             	IF	USE_DEV_6850
+    1103/    FD1B :                     	INCLUDE	"dev/dev_6850.asm"
+    1104/    FD1B : [1102]              	ENDIF
+    1105/    FD1B :                     
+    1106/    FD1B : =>FALSE             	IF	USE_DEV_EMILY
+    1107/    FD1B :                     	INCLUDE	"dev/dev_emily.asm"
+    1108/    FD1B : [1106]              	ENDIF
+    1109/    FD1B :                     
+    1110/    FD1B : =>TRUE              	IF	USE_DEV_6502CTRL
+    1111/    FD1B :                     	INCLUDE	"dev/dev_6502ctrl.asm"
+(1)    1/    FD1B :                     ;;;
+(1)    2/    FD1B :                     ;;;	6502ctrl DMA Console Driver
+(1)    3/    FD1B :                     ;;;
+(1)    4/    FD1B :                     
+(1)    5/    FD1B :                     INIT:
+(1)    6/    FD1B : 60                  	RTS
+(1)    7/    FD1C :                     
+(1)    8/    FD1C :                     ;;; conin
+(1)    9/    FD1C : 23 FD               	fdb dmarq_1
+(1)   10/    FD1E : CB                  CONIN:	wai
+(1)   11/    FD1F : AD 27 FD            	lda dmach_1
+(1)   12/    FD22 : 60                  	rts
+(1)   13/    FD23 :                     
+(1)   14/    FD23 :                     dmarq_1:
+(1)   15/    FD23 : 01                  	fcb DMA_SIO 		; dmano
+(1)   16/    FD24 : 02                  	fcb DMA_READ		; read
+(1)   17/    FD25 : FF FF               	fdb $ffff		; dma request block address (unused for SIO)
+(1)   18/    FD27 :                     dmach_1:
+(1)   19/    FD27 : 00                  	fcb 0			; dma data byte
+(1)   20/    FD28 :                     ;;; status
+(1)   21/    FD28 : 31 FD               	fdb dmarq_3
+(1)   22/    FD2A : CB                  CONST:	wai
+(1)   23/    FD2B : AD 35 FD            	lda dmach_3
+(1)   24/    FD2E : 29 01               	and #01
+(1)   25/    FD30 : 60                  	rts
+(1)   26/    FD31 :                     
+(1)   27/    FD31 :                     dmarq_3:
+(1)   28/    FD31 : 01                  	fcb DMA_SIO 		; dmano
+(1)   29/    FD32 : 04                  	fcb DMA_STATUS	; status
+(1)   30/    FD33 : FF FF               	fdb $ffff		; dma request block address (unused for SIO)
+(1)   31/    FD35 :                     dmach_3:
+(1)   32/    FD35 : 00                  	fcb 0			; dma data byte
+(1)   33/    FD36 :                     
+(1)   34/    FD36 :                     ;;; conout
+(1)   35/    FD36 :                     CONOUT:
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm(dev_6502ctrl.asm) - Page 22 - 2021/07/14 19時45分35秒
+
+
+(1)   36/    FD36 : 8D 43 FD            	sta dmach_2
+(1)   37/    FD39 : 80 02               	bra putc1
+(1)   38/    FD3B : 3F FD               	fdb dmarq_2
+(1)   39/    FD3D : CB                  putc1:	wai
+(1)   40/    FD3E : 60                  	rts
+(1)   41/    FD3F :                     
+(1)   42/    FD3F :                     dmarq_2:
+(1)   43/    FD3F : 01                  	fcb DMA_SIO 		; dmano
+(1)   44/    FD40 : 03                  	fcb DMA_WRITE		; write
+(1)   45/    FD41 : FF FF               	fdb $ffff		; dma request block address (unused for SIO)
+(1)   46/    FD43 :                     dmach_2:
+(1)   47/    FD43 : 00                  	fcb 0			; dma data byte
+(1)   48/    FD44 :                     
+    1112/    FD44 : [1110]              	ENDIF
+    1113/    FD44 :                     
+    1114/    FD44 :                     	;;
+    1115/    FD44 :                     	;; Entry point
+    1116/    FD44 :                     	;;
+    1117/    FD44 :                     
+    1118/    FF80 :                     	ORG	ENTRY+0		; Cold start
+    1119/    FF80 :                     E_CSTART:
+    1120/    FF80 : 4C 00 F6            	JMP	CSTART
+    1121/    FF83 :                     
+    1122/    FF88 :                     	ORG	ENTRY+8		; Warm start
+    1123/    FF88 :                     E_WSTART:
+    1124/    FF88 : 4C 7F F6            	JMP	WSTART
+    1125/    FF8B :                     
+    1126/    FF90 :                     	ORG	ENTRY+16	; Console output
+    1127/    FF90 :                     E_CONOUT:
+    1128/    FF90 : 4C 36 FD            	JMP	CONOUT
+    1129/    FF93 :                     
+    1130/    FF98 :                     	ORG	ENTRY+24	; (Console) String output
+    1131/    FF98 :                     E_STROUT:
+    1132/    FF98 : 4C E2 FA            	JMP	STROUT
+    1133/    FF9B :                     
+    1134/    FFA0 :                     	ORG	ENTRY+32	; Console input
+    1135/    FFA0 :                     E_CONIN:
+    1136/    FFA0 : 4C 1E FD            	JMP	CONIN
+    1137/    FFA3 :                     
+    1138/    FFA8 :                     	ORG	ENTRY+40	; Console status
+    1139/    FFA8 :                     E_CONST:
+    1140/    FFA8 : 4C 2A FD            	JMP	CONST
+    1141/    FFAB :                     
+    1142/    FFAB :                     	;;
+    1143/    FFAB :                     	;; Vector area
+    1144/    FFAB :                     	;; 
+    1145/    FFAB :                     
+    1146/    FFFA :                     	ORG	$FFFA
+    1147/    FFFA :                     
+    1148/    FFFA : 00 00               	FDB	$0000		; NMI
+    1149/    FFFC :                     
+    1150/    FFFC : 00 F6               	FDB	CSTART		; RESET
+    1151/    FFFE :                     
+    1152/    FFFE : DB FB               	FDB	IRQBRK		; IRQ/BRK
+    1153/   10000 :                     
+    1154/   10000 :                     ;;;
+    1155/   10000 :                     ;;; RAM	area
+    1156/   10000 :                     ;;;
+    1157/   10000 :                     
+    1158/   10000 :                     	;;
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm - Page 23 - 2021/07/14 19時45分35秒
+
+
+    1159/   10000 :                     	;; Work Area
+    1160/   10000 :                     	;;
+    1161/   10000 :                     
+    1162/       0 :                     	ORG	WORK_B
+    1163/       0 :                     
+    1164/       0 :                     INBUF:	RMB	BUFLEN		; Line input buffer
+    1165/      10 :                     DSADDR:	RMB	2		; Dump start address
+    1166/      12 :                     DEADDR:	RMB	2		; Dump end address
+    1167/      14 :                     DSTATE:	RMB	1		; Dump state
+    1168/      15 :                     GADDR:	RMB	2		; Go address
+    1169/      17 :                     SADDR:	RMB	2		; Set address
+    1170/      19 :                     HEXMOD:	RMB	1		; HEX file mode
+    1171/      1A :                     RECTYP:	RMB	1		; Record type
+    1172/      1B :                     PSPEC:	RMB	1		; Processor spec.
+    1173/      1C :                     
+    1174/      1C : =>TRUE              	IF USE_REGCMD
+    1175/      1C :                     REGA:	RMB	1		; Accumulator A
+    1176/      1D :                     REGX:	RMB	1		; Index register X
+    1177/      1E :                     REGY:	RMB	1		; Index register Y
+    1178/      1F :                     REGSP:	RMB	1		; Stack pointer SP
+    1179/      20 :                     REGPC:	RMB	2		; Program counter PC
+    1180/      22 :                     REGPSR:	RMB	1		; Processor status register PSR
+    1181/      23 :                     
+    1182/      23 :                     REGSIZ:	RMB	1		; Register size
+    1183/      24 : [1174]              	ENDIF
+    1184/      24 :                     	
+    1185/      24 :                     DMPPT:	RMB	2
+    1186/      26 :                     CKSUM:	RMB	1		; Checksum
+    1187/      27 :                     HITMP:	RMB	1		; Temporary (used in HEXIN)
+    1188/      28 :                     
+    1189/      28 :                     PT0:	RMB	2		; Generic Pointer 0
+    1190/      2A :                     PT1:	RMB	2		; Generic Pointer 1
+    1191/      2C :                     CNT:	RMB	1		; Generic Counter
+    1192/      2D :                     
+    1193/      2D :                     	END
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm() - Page 24 - 2021/07/14 19時45分35秒
+
+
+  Symbol Table (* = unused):
+  --------------------------
+
+*ARCHITECTURE :  "x86_64-apple-osx" - | *BIGENDIAN :                      0 - |
+*BRANCHEXT :                      0 - |  BRKMSG :                      FC9A C |
+ BS :                             8 - |  BUFLEN :                        10 - |
+*CASESENSITIVE :                  0 - |  CKSUM :                         26 C |
+ CNT :                           2C C | *COMPMODE :                       0 - |
+ CONIN :                       FD1E C |  CONOUT :                      FD36 C |
+ CONST :                       FD2A C | *CONSTPI :        3.141592653589793 - |
+ CR :                             D - |  CRLF :                        FB33 C |
+ CSTART :                      F600 C | *CUSTOM :                         0 - |
+*DATE :                "2021/07/14" - |  DEADDR :                        12 C |
+ DEL :                           7F - |  DMACH_1 :                     FD27 C |
+ DMACH_2 :                     FD43 C |  DMACH_3 :                     FD35 C |
+ DMARQ_1 :                     FD23 C |  DMARQ_2 :                     FD3F C |
+ DMARQ_3 :                     FD31 C | *DMA_HALT :                       0 - |
+ DMA_READ :                       2 - | *DMA_RESET :                      1 - |
+ DMA_SIO :                        1 - |  DMA_STATUS :                     4 - |
+ DMA_WRITE :                      3 - |  DMPPT :                         24 C |
+ DP0 :                         F6EC C |  DP00 :                        F6DC C |
+ DP1 :                         F704 C |  DPB :                         F7AF C |
+ DPB0 :                        F7C0 C |  DPB1 :                        F7CF C |
+ DPB2 :                        F7D3 C |  DPBE :                        F7FE C |
+ DPL :                         F765 C |  DPL0 :                        F77E C |
+ DPL1 :                        F792 C |  DPL2 :                        F7A2 C |
+ DPL3 :                        F7A7 C |  DPM :                         F723 C |
+ DPM0 :                        F731 C |  DPM1 :                        F757 C |
+ DSADDR :                        10 C |  DSEP0 :                       FC50 C |
+ DSEP1 :                       FC53 C |  DSTATE :                        14 C |
+ DUMP :                        F6CA C |  ENTRY :                       FF80 - |
+ ERR :                         F6BC C |  ERRMSG :                      FC48 C |
+*E_CONIN :                     FFA0 C | *E_CONOUT :                    FF90 C |
+*E_CONST :                     FFA8 C | *E_CSTART :                    FF80 C |
+*E_STROUT :                    FF98 C | *E_WSTART :                    FF88 C |
+*FALSE :                          0 - | *FULLPMMU :                       1 - |
+ G0 :                          F819 C |  G00 :                         F80D C |
+ GADDR :                         15 C |  GETLIN :                      FB3D C |
+ GL0 :                         FB3F C |  GLB :                         FB67 C |
+ GLE :                         FB7E C |  GO :                          F7FF C |
+*HAS64 :                          1 - | *HASDSP :                         0 - |
+*HASFPU :                         0 - | *HASPMMU :                        0 - |
+ HEXIN :                       FB08 C |  HEXMOD :                        19 C |
+ HEXOUT1 :                     FAF9 C |  HEXOUT2 :                     FAF0 C |
+ HEXOUTE :                     FB05 C |  HI0 :                         FB11 C |
+ HI1 :                         FB2C C |  HIR :                         FB32 C |
+ HITMP :                         27 C |  IBIR :                        FC0E C |
+ ID2A03 :                      F670 C |  ID65C :                       F650 C |
+ IDE :                         F67A C |  IDR65C :                      F663 C |
+ IHEMSG :                      FC2E C | *IHEXER :                      FC57 C |
+ IM2A03 :                      FC91 C |  IM65 :                        FC72 C |
+ IM65C :                       FC79 C |  IMR65C :                      FC81 C |
+ INBUF :                          0 C | *INEXTMODE :                      0 - |
+ INIT :                        FD1B C | *INLWORDMODE :                    0 - |
+*INMAXMODE :                      0 - | *INSRCMODE :                      0 - |
+*INSUPMODE :                      0 - |  IRQBRK :                      FBDB C |
+ LF :                             A - |  LH0 :                         F8C2 C |
+*LH1A :                        F8CC C |  LH2 :                         F8D0 C |
+ LH3 :                         F8D8 C |  LHI0 :                        F8DE C |
+ LHI1 :                        F916 C |  LHI2 :                        F928 C |
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm() - Page 25 - 2021/07/14 19時45分35秒
+
+
+ LHI3 :                        F92D C |  LHIE :                        F93C C |
+ LHS0 :                        F94A C |  LHS1 :                        F981 C |
+ LHS2 :                        F995 C |  LHS3 :                        F99A C |
+ LHSE :                        F9AD C |  LHSR :                        F9B8 C |
+*LISTON :                         1 - |  LOADH :                       F8B4 C |
+ M00 :                         F6A0 C |  M01 :                         F6A7 C |
+ M02 :                         F6AE C |  M03 :                         F6B5 C |
+ M05 :                         F6BC C | *MACEXP :                         7 - |
+*MOMCPU :                     65C02 - | *MOMCPUNAME :             "W65C02S" - |
+*NESTMAX :                      100 - |  OPNMSG :                      FC10 C |
+*PACKING :                        0 - | *PADDING :                        1 - |
+ PROMPT :                      FC2B C |  PSPEC :                         1B C |
+ PT0 :                           28 C |  PT1 :                           2A C |
+ PUTC1 :                       FD3D C |  RDHEX :                       FB9C C |
+ RDSA :                        FCA0 C |  RDSPC :                       FCB2 C |
+ RDSPSR :                      FCB7 C |  RDSSP :                       FCAB C |
+ RDSX :                        FCA3 C |  RDSY :                        FCA7 C |
+ RDUMP :                       FA7A C |  RECTYP :                        1A C |
+ REG :                         F9BB C |  REGA :                          1C C |
+ REGPC :                         20 C |  REGPSR :                        22 C |
+ REGSIZ :                        23 C |  REGSP :                         1F C |
+ REGX :                          1D C |  REGY :                          1E C |
+*RELAXED :                        0 - |  RG0 :                         F9CC C |
+ RG1 :                         F9D6 C |  RG2 :                         F9ED C |
+ RG3 :                         FA0D C |  RG4 :                         FA40 C |
+ RG5 :                         FA4A C |  RG6 :                         FA6C C |
+ RG7 :                         FA74 C |  RGE :                         F9E9 C |
+ RGE0 :                        FA77 C |  RGR :                         FA74 C |
+ RH0 :                         FBA4 C |  RH1 :                         FBBC C |
+ RHE :                         FBDA C |  RNA :                         FD0B C |
+ RNPC :                        FD14 C |  RNPSR :                       FD17 C |
+ RNSP :                        FD11 C |  RNTAB :                       FCBD C |
+ RNTABP :                      FCED C |  RNTABPS :                     FCFF C |
+ RNTABS :                      FCE1 C |  RNX :                         FD0D C |
+ RNY :                         FD0F C |  ROM_B :                       F600 - |
+ SADDR :                         17 C |  SETM :                        F82C C |
+ SHEMSG :                      FC3B C |  SKIPSP :                      FB86 C |
+ SM0 :                         F83D C |  SM1 :                         F849 C |
+ SM10 :                        F876 C |  SM2 :                         F886 C |
+ SM3 :                         F89A C |  SM4 :                         F8A1 C |
+ SM40 :                        F8AB C |  SMER :                        F8A8 C |
+*SRECER :                      FC65 C |  SSE :                         FB90 C |
+ STACK :                        1FF - |  STRO0 :                       FAE4 C |
+ STROE :                       FAEF C |  STROUT :                      FAE2 C |
+*TARGET :                    "6502" - |
+*TIME :               "19\-026\-103\-12645\-027\-120\-12235\-025\-089\-110" - |
+*TRUE :                           1 - |  UPE :                         FB9B C |
+ UPPER :                       FB91 C |  USE_DEV_6502CTRL :               1 - |
+ USE_DEV_6551 :                   0 - |  USE_DEV_6850 :                   0 - |
+ USE_DEV_EMILY :                  0 - |  USE_IDENT :                      1 - |
+ USE_REGCMD :                     1 - | *VERSION :                     142F - |
+ WORK_B :                         0 - |  WSTART :                      F67F C |
+*Z80SYNTAX :                      0 - |
+
+    217 symbols
+     43 unused symbols
+
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm() - Page 26 - 2021/07/14 19時45分35秒
+
+
+  Defined Functions:
+  ------------------
+
+HIGH                                  | LOW                                  
+
+ AS V1.42 Beta [Bld 204] - Source File unimon_6502.asm() - Page 27 - 2021/07/14 19時45分35秒
+
+
+  Code Pages:
+  ----------
+
+STANDARD (0 changed characters)
+
+1 code page
+
+0.03 seconds assembly time
+
+   1337 lines source file
+      3 passes
+      0 errors
+      0 warnings
