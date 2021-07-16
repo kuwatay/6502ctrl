@@ -8,7 +8,7 @@ AVR-based supervisor for a w65c02 microcomputer based on z80ctrl https://github.
 * Console and other I/O are handled by DMA (ultra fast WAI instruction)
 * Monitor with file management, memory inspector, and built-in 6502 disassembler
 * Single-step debugging, breakpoints, and watchpoints to trace 6502 bus activity in real-time
-* Arduino Shield style hardware
+* Arduino Shield style hardware (6502ctrl-mega)
 * Flexible MIT-licensed firmware inhelited from z80ctrl
 
 ## Documentation
