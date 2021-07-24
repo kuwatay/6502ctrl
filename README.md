@@ -4,16 +4,23 @@ AVR-based supervisor for a w65c02 microcomputer based on z80ctrl https://github.
 ![](hardware/6502ctrl-mega.jpg)
 
 6502ctrl has the following features:
-* Support W65C02 and 64KB ram
+* Support W65C02 and 64KB(128KB) ram
 * Console and other I/O are handled by DMA (ultra fast WAI instruction)
 * Monitor with file management, memory inspector, and built-in 6502 disassembler
 * Single-step debugging, breakpoints, and watchpoints to trace 6502 bus activity in real-time
 * Arduino Shield style hardware (6502ctrl-mega)
 * Flexible MIT-licensed firmware inhelited from z80ctrl
 
-## Documentation
+# Documentation
+
+## Application
+https://github.com/kuwatay/6502ctrl/wiki/Application
 
 ## Hardware note
+https://github.com/kuwatay/6502ctrl/wiki/Hardware-of-6502ctrl-mega
+
+## Supervisor sample session
+https://github.com/kuwatay/6502ctrl/wiki/Sample-session-of--Supervisor
 
 ## DMA handling
 https://github.com/kuwatay/6502ctrl/wiki/DMA-I-O-request
