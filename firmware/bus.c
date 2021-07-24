@@ -133,8 +133,8 @@ void bus_release(void)
 bus_stat bus_status(void)
 {
     bus_stat status;
-    status.flags = PINK;
-    status.flags2 = (PING & CTRLG_MASK) | (PINB & CTRLH_MASK);
+    status.flags = CONT_PIN;
+    status.flags2 = (PING & CTRLG_MASK) | (PINH & CTRLH_MASK);
     status.data = GET_DATA;
     status.addr = GET_ADDR;
     return status;
