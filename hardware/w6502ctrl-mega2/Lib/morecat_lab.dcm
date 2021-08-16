@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP AS6C4008
+D 128K x 8 High-Speed CMOS Static RAM, 55/70ns, DIP-32/SSOP-32
+K RAM SRAM CMOS MEMORY
+F http://www.futurlec.com/Datasheet/Memory/628128.pdf
+$ENDCMP
+#
+#End Doc Library
