@@ -1,5 +1,5 @@
 /* 6502ctrl (https://github.com/kuwatay/6502cttl)
- * Copyright 2021 Yoshiyaka Kuwata a.k.a. morecat_lab
+ * Copyright 2021 Yoshitaka Kuwata a.k.a. morecat_lab
  *
  * based on z80ctrl (https://github.com/jblang/z80ctrl)
  * Copyright 2018 J.B. Langston
@@ -57,6 +57,10 @@
 #include "flash.h"
 #endif
 #include "ffwrap.h"
+
+#ifdef HPDL1414
+#include "hpdl1414.h"
+#endif
 
 /**
  * SD card filesystem
@@ -787,6 +791,9 @@ void cli_boot(int argc, char*argv[])
 void cli_bus(int argc, char *argv[]) 
 {
     bus_log(bus_status());
+#ifdef HPDL1414
+    hpdl1414_disp(bus_status());
+#endif
 }
 
 #if 0
@@ -1555,6 +1562,16 @@ int main(void)
       printf_P(PSTR("error mounting drive: %S\n"), strlookup(fr_text, fr));
 
     bus_init();
+
+#ifdef HPDL1414    
+    hpdl1414_init();
+    hpdl1414_clear();
+    //    hpdl1414_strcpy("6502CTRL_RDY");
+    hpdl1414_strcpy_P(PSTR("6502CTRL_RDY"));
+    // test code
+    hpdl1414_disp_adrs(0xffff);
+    hpdl1414_disp_data(0xaa);
+#endif
 
     //cli_exec(AUTOEXEC);
     cli_loop();

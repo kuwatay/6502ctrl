@@ -13,6 +13,9 @@
 # Uncomment to enable DS1302 RTC support (used on CPU/RAM/RTC board)
 # DS1302_RTC=1
 
+HDPL1414=1
+
+
 # Current git hash
 #GITVERSION:= $(shell git log -1 --pretty='%h')
 #GITVERSION:= $(shell echo no git)
@@ -56,6 +59,11 @@ OBJS=	cli.o \
 	disasm.o \
 	uart.o
 
+ifdef HPDL1414
+	FEATURE_DEFINES += -DHP_LED_DISPLAY
+	OBJS += hpdl1414.o
+endif
+
 ifdef BOARD_REV
 	FEATURE_DEFINES += -DBOARD_REV=$(BOARD_REV)
 endif
@@ -94,7 +102,7 @@ ifdef MSX_KEY_BASE
 	FEATURE_DEFINES += -DMSX_KEY_BASE=$(MSX_KEY_BASE)
 	OBJS += msxkey.o
 endif
-CFLAGS=-std=c99 -flto -Os $(FEATURE_DEFINES) -DMEGA -DF_CPU=$(F_CPU) -mmcu=$(MCU) -I.
+CFLAGS=-std=c99 -flto -Os $(FEATURE_DEFINES) -DHPDL1414 -DMEGA -DF_CPU=$(F_CPU) -mmcu=$(MCU) -I.
 
 %.o: %.c
 	$(AVRCC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<

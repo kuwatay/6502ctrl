@@ -1,5 +1,5 @@
 /* 6502ctrl (https://github.com/kuwatay/6502cttl)
- * Copyright 2021 Yoshiyaka Kuwata a.k.a. morecat_lab
+ * Copyright 2021 Yoshitaka Kuwata a.k.a. morecat_lab
  *
  * based on z80ctrl (https://github.com/jblang/z80ctrl)
  * Copyright 2018 J.B. Langston
@@ -37,6 +37,11 @@
 #include "uart.h"
 #include "dmarq.h"
 #include "util.h"
+
+#ifdef HPDL1414
+#include "hpdl1414.h"
+#endif
+
 
 /**
  * Breakpoints and watch names
@@ -169,26 +174,44 @@ void w6502_debug(uint32_t cycles)
       if (INRANGE(breaks, MEMRD, status.addr)) {
 	printf_P(PSTR("break at $%04x :memrd\n"), status.addr);
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
 	break;
       } else if (INRANGE(watches, MEMRD, status.addr)) {
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
       } else if (INRANGE(watches, BUS, status.addr)) {
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
       }
     } else { // memory write
       if (INRANGE(breaks, MEMWR, status.addr)) {
 	printf_P(PSTR("break at $%04x :memwe\n"), status.addr);
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
 	break;
       } else if (INRANGE(watches, MEMWR, status.addr)) {
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
       } else if (INRANGE(watches, BUS, status.addr)) {
 	bus_log(status);
+#ifdef HPDL1414
+	hpdl1414_disp(bus_status());
+#endif
 	uart_flush();
       }
     }

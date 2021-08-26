@@ -1,5 +1,5 @@
 /* 6502ctrl (https://github.com/kuwatay/6502cttl)
- * Copyright 2021 Yoshiyaka Kuwata a.k.a. morecat_lab
+ * Copyright 2021 Yoshitaka Kuwata a.k.a. morecat_lab
  *
  * based on z80ctrl (https://github.com/jblang/z80ctrl)
  * Copyright 2018 J.B. Langston
