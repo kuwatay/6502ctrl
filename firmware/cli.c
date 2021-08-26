@@ -790,9 +790,10 @@ void cli_boot(int argc, char*argv[])
  */
 void cli_bus(int argc, char *argv[]) 
 {
-    bus_log(bus_status());
+  bus_stat status = bus_status();
+  bus_log(status);
 #ifdef HPDL1414
-    hpdl1414_disp(bus_status());
+  hpdl1414_disp(status);
 #endif
 }
 
@@ -1566,11 +1567,7 @@ int main(void)
 #ifdef HPDL1414    
     hpdl1414_init();
     hpdl1414_clear();
-    //    hpdl1414_strcpy("6502CTRL_RDY");
     hpdl1414_strcpy_P(PSTR("6502CTRL_RDY"));
-    // test code
-    hpdl1414_disp_adrs(0xffff);
-    hpdl1414_disp_data(0xaa);
 #endif
 
     //cli_exec(AUTOEXEC);

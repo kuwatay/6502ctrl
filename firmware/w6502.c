@@ -175,20 +175,20 @@ void w6502_debug(uint32_t cycles)
 	printf_P(PSTR("break at $%04x :memrd\n"), status.addr);
 	bus_log(status);
 #ifdef HPDL1414
-	hpdl1414_disp(bus_status());
+	hpdl1414_disp(status);
 #endif
 	uart_flush();
 	break;
       } else if (INRANGE(watches, MEMRD, status.addr)) {
 	bus_log(status);
 #ifdef HPDL1414
-	hpdl1414_disp(bus_status());
+	hpdl1414_disp(status);
 #endif
 	uart_flush();
       } else if (INRANGE(watches, BUS, status.addr)) {
 	bus_log(status);
 #ifdef HPDL1414
-	hpdl1414_disp(bus_status());
+	hpdl1414_disp(status);
 #endif
 	uart_flush();
       }
@@ -197,14 +197,14 @@ void w6502_debug(uint32_t cycles)
 	printf_P(PSTR("break at $%04x :memwe\n"), status.addr);
 	bus_log(status);
 #ifdef HPDL1414
-	hpdl1414_disp(bus_status());
+	hpdl1414_disp(status);
 #endif
 	uart_flush();
 	break;
       } else if (INRANGE(watches, MEMWR, status.addr)) {
 	bus_log(status);
 #ifdef HPDL1414
-	hpdl1414_disp(bus_status());
+	hpdl1414_disp(status);
 #endif
 	uart_flush();
       } else if (INRANGE(watches, BUS, status.addr)) {
