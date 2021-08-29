@@ -102,7 +102,7 @@ ifdef MSX_KEY_BASE
 	FEATURE_DEFINES += -DMSX_KEY_BASE=$(MSX_KEY_BASE)
 	OBJS += msxkey.o
 endif
-CFLAGS=-std=c99 -flto -Os $(FEATURE_DEFINES) -DHPDL1414 -DMEGA -DF_CPU=$(F_CPU) -mmcu=$(MCU) -I.
+CFLAGS=-std=c99 -flto -Os $(FEATURE_DEFINES) -DMEGA -DF_CPU=$(F_CPU) -mmcu=$(MCU) -I.
 
 %.o: %.c
 	$(AVRCC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
