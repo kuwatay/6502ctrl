@@ -165,7 +165,7 @@
 #define BE_INPUT CONT_DDR &= ~BE
 #define BE_STATUS (status.flags & BE)
 
-#define CTRLK_OUTPUT_INIT CONT_DDR |= RESET
+#define CTRLK_OUTPUT_INIT CONT_DDR |= (RESET | BE)
 
 
 /* PORT H */
