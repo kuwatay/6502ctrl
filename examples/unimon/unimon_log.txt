@@ -1,0 +1,32 @@
+6502ctrl:/>dir
+SPOTLI~1/    FSEVEN~1/    MSBASIC.BIN  OSI_BAS.BIN  GAME65.BIN   WOZMON.HEX   
+WOZMON~1.HEX UNIMON.HEX   ECHO.BIN     HELLO.BIN    LOOP.BIN     
+11 item(s)
+6502ctrl:/>loadhex unimon.hex
+loading from unimon.hex
+loaded 1884 bytes total from f600-ffff
+6502ctrl:/>run f600
+
+Universal Monitor 6502
+R65C02/W65C02
+] D0
+0000 : 44 30 00 4C B5 E8 F7 ED B3 EF 4C 7A EE 00 00 50 : D0.L......Lz...P
+0010 : 00 00 80 00 01 00 00 00 00 53 54 03 00 00 00 FF : .........ST.....
+0020 : 00 00 00 38 2B 49 29 3B 28 00 20 00 01 54 4F 20 : ...8+I);(. ..TO 
+0030 : 32 30 30 00 00 00 00 00 80 00 00 00 00 00 00 00 : 200.............
+0040 : 01 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF : ................
+0050 : 02 00 00 00 00 02 00 00 00 00 00 22 22 44 00 FF : ...........""D..
+0060 : 00 00 FF 00 00 68 65 00 06 92 E1 FF FF FF FF FF : .....he.........
+0070 : 00 92 E1 F7 01 53 9E E5 00 01 02 FE 02 2E 03 2E : .....S..........
+] DF600
+F600 : A2 FF 9A 20 1B FD A9 00 85 10 85 11 85 17 85 18 : ... ............
+F610 : 85 15 85 16 85 1B A9 53 85 19 A9 00 85 1C 85 1D : .......S........
+F620 : 85 1E 85 20 85 21 85 22 BA 86 1F A9 10 85 28 A9 : ... .!."......(.
+F630 : FC 85 29 20 E2 FA 80 18 F8 18 A9 05 69 05 C9 0A : ..) ........i...
+F640 : D8 F0 2D A9 72 85 28 A9 FC 85 29 A9 00 4C 7A F6 : ..-.r.(...)..Lz.
+F650 : 0F A9 10 8F A9 0D A9 79 85 28 A9 FC 85 29 A9 01 : .......y.(...)..
+F660 : 4C 7A F6 A9 81 85 28 A9 FC 85 29 A9 03 4C 7A F6 : Lz....(...)..Lz.
+F670 : A9 91 85 28 A9 FC 85 29 A9 10 85 1B 20 E2 FA A9 : ...(...).... ...
+] R
+A=00 X=00 Y=00 SP=01FF PC=0000 PSR=00
+] 
