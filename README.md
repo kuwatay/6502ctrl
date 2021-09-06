@@ -1,7 +1,7 @@
 # 6502ctrl
 AVR-based supervisor for a w65c02 microcomputer based on z80ctrl https://github.com/jblang/z80ctrl
 
-![](hardware/rev1/6502ctrl-mega.jpg)
+![](hardware/rev2/6502ctrl-rev2-image.jpg)
 
 6502ctrl has the following features:
 * Support W65C02 and 64KB(128KB) ram
